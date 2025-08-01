@@ -4,6 +4,7 @@ import (
 	"context"
 	"maps"
 	"slices"
+	"sort"
 
 	"github.com/libdns/libdns"
 	"github.com/pkg/errors"
@@ -12,6 +13,22 @@ import (
 
 type Provider struct {
 	client Client
+}
+
+func (p *Provider) ListZones(ctx context.Context) ([]libdns.Zone, error) {
+	zones, err := p.client.GetZones(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "get zones")
+	}
+
+	result := make([]libdns.Zone, len(zones))
+	for i, zone := range zones {
+		result[i] = libdns.Zone{
+			Name: zone,
+		}
+	}
+
+	return result, nil
 }
 
 func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record, error) {
@@ -31,13 +48,17 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 	}), nil
 }
 
-func (p *Provider) SetRecords(ctx context.Context, zone string, recs []libdns.Record) (result []libdns.Record, errs error) {
+func (p *Provider) SetRecords(
+	ctx context.Context,
+	zone string,
+	records []libdns.Record,
+) (result []libdns.Record, errs error) {
 	prev, err := p.client.GetRRSets(ctx, zone)
 	if err != nil {
 		return nil, errors.Wrap(err, "get RR sets")
 	}
 
-	next := fromRecords(recs)
+	next := fromRecords(records)
 
 	del, mod, _ := diffRRSets(prev, next)
 	add, _, _ := diffRRSets(next, prev)
@@ -45,8 +66,30 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, recs []libdns.Re
 	for i := range mod {
 		set := &mod[i]
 		next := next[set.Key]
-		set.TTL = next.TTL
-		set.RRs = next.RRs
+		var rrs []RR
+		rrs = append(rrs, next.RRs...)
+		for _, srr := range set.RRs {
+			if !srr.Disabled {
+				continue
+			}
+
+			found := false
+			for _, nrr := range next.RRs {
+				if nrr.Content == srr.Content {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				rrs = append(rrs, srr)
+			}
+		}
+
+		sort.Slice(rrs, func(i, j int) bool { return rrs[i].Content < rrs[j].Content })
+
+		set.TTL = getTTL(set.TTL, next.TTL)
+		set.RRs = rrs
 	}
 
 	added, err := p.client.CreateRRSets(ctx, zone, slices.Values(add))
@@ -65,13 +108,17 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, recs []libdns.Re
 	return
 }
 
-func (p *Provider) AppendRecords(ctx context.Context, zone string, recs []libdns.Record) (result []libdns.Record, errs error) {
+func (p *Provider) AppendRecords(
+	ctx context.Context,
+	zone string,
+	records []libdns.Record,
+) (result []libdns.Record, errs error) {
 	prev, err := p.client.GetRRSets(ctx, zone)
 	if err != nil {
 		return nil, errors.Wrap(err, "get RR sets")
 	}
 
-	next := fromRecords(recs)
+	next := fromRecords(records)
 	_, mod, _ := diffRRSets(prev, next)
 	add, _, _ := diffRRSets(next, prev)
 
@@ -79,6 +126,7 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, recs []libdns
 	for i := range mod {
 		set := &mod[i]
 		next := next[set.Key]
+		ttl := getTTL(set.TTL, next.TTL)
 		for _, nrr := range next.RRs {
 			found := false
 			for i := range set.RRs {
@@ -89,7 +137,7 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, recs []libdns
 						radd = append(radd, libdns.RR{
 							Name: set.Key.Name,
 							Type: set.Key.Type,
-							TTL:  set.TTL,
+							TTL:  ttl,
 							Data: srr.Content,
 						})
 					}
@@ -104,11 +152,15 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, recs []libdns
 				radd = append(radd, libdns.RR{
 					Name: set.Key.Name,
 					Type: set.Key.Type,
-					TTL:  set.TTL,
+					TTL:  ttl,
 					Data: nrr.Content,
 				})
 			}
 		}
+
+		sort.Slice(set.RRs, func(i, j int) bool { return set.RRs[i].Content < set.RRs[j].Content })
+
+		set.TTL = ttl
 	}
 
 	added, err := p.client.CreateRRSets(ctx, zone, slices.Values(add))
@@ -124,19 +176,68 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, recs []libdns
 	return
 }
 
-func (p *Provider) DeleteRecords(ctx context.Context, zone string, recs []libdns.Record) ([]libdns.Record, error) {
-	//TODO implement me
-	panic("implement me")
-}
+func (p *Provider) DeleteRecords(
+	ctx context.Context,
+	zone string,
+	records []libdns.Record,
+) (result []libdns.Record, errs error) {
+	prev, err := p.client.GetRRSets(ctx, zone)
+	if err != nil {
+		return nil, errors.Wrap(err, "get RR sets")
+	}
 
-func (p *Provider) ListZones(ctx context.Context) ([]libdns.Zone, error) {
-	panic("unimplemented")
+	next := fromRecords(records)
+	_, mod, del := diffRRSets(prev, next)
+
+	var rdel []libdns.Record
+	for i := range mod {
+		set := &mod[i]
+		next := next[set.Key]
+		var rrs []RR
+		for i := range set.RRs {
+			srr := &set.RRs[i]
+			found := false
+			for _, nrr := range next.RRs {
+				if srr.Content == nrr.Content && !srr.Disabled {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				rrs = append(rrs, *srr)
+			} else {
+				rdel = append(rdel, libdns.RR{
+					Name: set.Key.Name,
+					Type: set.Key.Type,
+					TTL:  set.TTL,
+					Data: srr.Content,
+				})
+			}
+		}
+
+		sort.Slice(rrs, func(i, j int) bool { return rrs[i].Content < rrs[j].Content })
+
+		set.RRs = rrs
+	}
+
+	err = p.client.DeleteRRSets(ctx, zone, slices.Values(del))
+	if !multierr.AppendInto(&errs, errors.Wrap(err, "delete RR sets")) {
+		result = slices.AppendSeq(result, toRecords(slices.Values(del)))
+	}
+
+	err = p.client.UpdateRRSets(ctx, zone, slices.Values(mod))
+	if !multierr.AppendInto(&errs, errors.Wrap(err, "update RR sets")) {
+		result = slices.AppendSeq(result, toRecords(slices.Values(mod)))
+	}
+
+	return
 }
 
 var (
+	_ libdns.ZoneLister     = (*Provider)(nil)
 	_ libdns.RecordGetter   = (*Provider)(nil)
 	_ libdns.RecordSetter   = (*Provider)(nil)
 	_ libdns.RecordAppender = (*Provider)(nil)
 	_ libdns.RecordDeleter  = (*Provider)(nil)
-	_ libdns.ZoneLister     = (*Provider)(nil)
 )

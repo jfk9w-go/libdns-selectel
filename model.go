@@ -40,7 +40,7 @@ func fromSelectel(rrs *v2.RRSet) RRSet {
 			Type: string(rrs.Type),
 		},
 		ID:  rrs.ID,
-		TTL: time.Duration(rrs.TTL) * time.Second,
+		TTL: getTTL(time.Duration(rrs.TTL) * time.Second),
 		RRs: slices.Collect(func(yield func(RR) bool) {
 			for _, item := range rrs.Records {
 				rr := RR{
@@ -65,12 +65,16 @@ func (s RRSet) isEqual(other RRSet) bool {
 	return reflect.DeepEqual(a, b)
 }
 
+func (s RRSet) isDisabled() bool {
+	return len(slices.Collect(s.toRecords())) == 0
+}
+
 func (s RRSet) toSelectel() *v2.RRSet {
 	return &v2.RRSet{
 		ID:   s.ID,
 		Name: s.Key.Name,
 		Type: v2.RecordType(s.Key.Type),
-		TTL:  int(max(s.TTL, time.Minute).Seconds()),
+		TTL:  int(getTTL(s.TTL).Seconds()),
 		Records: slices.Collect(func(yield func(v2.RecordItem) bool) {
 			for _, rr := range s.RRs {
 				item := v2.RecordItem{
@@ -97,7 +101,7 @@ func fromRecords(records []libdns.Record) map[RRSetKey]RRSet {
 		set := result[key]
 
 		set.Key = key
-		set.TTL = max(set.TTL, record.RR().TTL)
+		set.TTL = getTTL(set.TTL, record.RR().TTL)
 		set.RRs = append(set.RRs, RR{Content: record.RR().Data})
 		sort.Slice(set.RRs, func(i, j int) bool { return set.RRs[i].Content < set.RRs[j].Content })
 
@@ -117,7 +121,7 @@ func (s RRSet) toRecords() iter.Seq[libdns.Record] {
 			record := libdns.RR{
 				Name: s.Key.Name,
 				Type: s.Key.Type,
-				TTL:  s.TTL,
+				TTL:  getTTL(s.TTL),
 				Data: rr.Content,
 			}
 
@@ -134,16 +138,20 @@ type RRSetDiff struct {
 	Matched  []RRSet
 }
 
-func diffRRSets(prev, next map[RRSetKey]RRSet) (del []RRSet, mod []RRSet, same []RRSet) {
+func diffRRSets(prev, next map[RRSetKey]RRSet) (del []RRSet, mod []RRSet, keep []RRSet) {
 	for key, prev := range prev {
 		next, ok := next[key]
 		switch {
 		case !ok:
+			if prev.isDisabled() {
+				break
+			}
+
 			del = append(del, prev)
 		case !prev.isEqual(next):
 			mod = append(mod, prev)
 		default:
-			same = append(same, prev)
+			keep = append(keep, prev)
 		}
 	}
 

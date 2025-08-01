@@ -13,18 +13,21 @@ import (
 	"go.uber.org/multierr"
 )
 
-type Client interface {
-	GetZones(ctx context.Context) ([]string, error)
-	GetRRSets(ctx context.Context, zone string) (map[RRSetKey]RRSet, error)
-	CreateRRSets(ctx context.Context, zone string, sets iter.Seq[RRSet]) (map[RRSetKey]RRSet, error)
-	UpdateRRSets(ctx context.Context, zone string, sets iter.Seq[RRSet]) error
-	DeleteRRSets(ctx context.Context, zone string, sets iter.Seq[RRSet]) error
-}
+const defaultLimit = 100
 
 type client struct {
-	api     v2.DNSClient[v2.Zone, v2.RRSet]
-	zoneIDs map[string]string
-	mu      sync.RWMutex
+	dns   DNSClient
+	limit int
+	zones map[string]string
+	mu    sync.RWMutex
+}
+
+func NewClient(dns DNSClient) Client {
+	return &client{
+		dns:   dns,
+		limit: defaultLimit,
+		zones: make(map[string]string),
+	}
 }
 
 func (c *client) GetZones(ctx context.Context) ([]string, error) {
@@ -42,8 +45,8 @@ func (c *client) GetRRSets(ctx context.Context, zone string) (map[RRSetKey]RRSet
 		return nil, errors.Wrap(err, "get zone ID")
 	}
 
-	iterator := iterate(func(params *map[string]string) (v2.Listable[v2.RRSet], error) {
-		return c.api.ListRRSets(ctx, zoneID, params)
+	iterator := iterate(c, func(params *map[string]string) (v2.Listable[v2.RRSet], error) {
+		return c.dns.ListRRSets(ctx, zoneID, params)
 	})
 
 	result := make(map[RRSetKey]RRSet)
@@ -67,7 +70,7 @@ func (c *client) CreateRRSets(ctx context.Context, zone string, sets iter.Seq[RR
 
 	result = make(map[RRSetKey]RRSet)
 	for set := range sets {
-		rrs, err := c.api.CreateRRSet(ctx, zoneID, set.toSelectel())
+		rrs, err := c.dns.CreateRRSet(ctx, zoneID, set.toSelectel())
 		if !multierr.AppendInto(&errs, errors.Wrapf(err, "create %s", set.Key)) {
 			set := fromSelectel(rrs)
 			result[set.Key] = set
@@ -84,7 +87,7 @@ func (c *client) UpdateRRSets(ctx context.Context, zone string, sets iter.Seq[RR
 	}
 
 	for set := range sets {
-		err := c.api.UpdateRRSet(ctx, zoneID, set.ID, set.toSelectel())
+		err := c.dns.UpdateRRSet(ctx, zoneID, set.ID, set.toSelectel())
 		_ = multierr.AppendInto(&errs, errors.Wrapf(err, "update %s", set.Key))
 	}
 
@@ -98,7 +101,7 @@ func (c *client) DeleteRRSets(ctx context.Context, zone string, sets iter.Seq[RR
 	}
 
 	for set := range sets {
-		err := c.api.DeleteRRSet(ctx, zoneID, set.ID)
+		err := c.dns.DeleteRRSet(ctx, zoneID, set.ID)
 		_ = multierr.AppendInto(&errs, errors.Wrapf(err, "delete %s", set.Key))
 	}
 
@@ -107,7 +110,7 @@ func (c *client) DeleteRRSets(ctx context.Context, zone string, sets iter.Seq[RR
 
 func (c *client) getZoneID(ctx context.Context, name string) (string, error) {
 	c.mu.RLock()
-	zoneID, ok := c.zoneIDs[name]
+	zoneID, ok := c.zones[name]
 	c.mu.RUnlock()
 
 	if ok {
@@ -128,12 +131,12 @@ func (c *client) getZoneID(ctx context.Context, name string) (string, error) {
 }
 
 func (c *client) getZoneIDs(ctx context.Context, name string) (map[string]string, error) {
-	iterator := iterate(func(params *map[string]string) (v2.Listable[v2.Zone], error) {
+	iterator := iterate(c, func(params *map[string]string) (v2.Listable[v2.Zone], error) {
 		if params != nil && name != "" {
 			(*params)["filter"] = name
 		}
 
-		return c.api.ListZones(ctx, params)
+		return c.dns.ListZones(ctx, params)
 	})
 
 	result := make(map[string]string)
@@ -147,19 +150,18 @@ func (c *client) getZoneIDs(ctx context.Context, name string) (map[string]string
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	maps.Copy(c.zoneIDs, result)
+	maps.Copy(c.zones, result)
 
 	return result, nil
 }
 
-func iterate[T any](fn func(params *map[string]string) (v2.Listable[T], error)) iter.Seq2[*T, error] {
-	const limit = 10000
+func iterate[T any](c *client, fn func(params *map[string]string) (v2.Listable[T], error)) iter.Seq2[*T, error] {
 	offset := 0
 	return func(yield func(*T, error) bool) {
 		for {
 			params := &map[string]string{
 				"offset": strconv.Itoa(offset),
-				"limit":  strconv.Itoa(limit),
+				"limit":  strconv.Itoa(c.limit),
 			}
 
 			resp, err := fn(params)
@@ -174,7 +176,7 @@ func iterate[T any](fn func(params *map[string]string) (v2.Listable[T], error)) 
 				}
 			}
 
-			if resp.GetCount() < limit {
+			if resp.GetCount() < c.limit {
 				return
 			}
 
