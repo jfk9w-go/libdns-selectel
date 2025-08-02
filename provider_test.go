@@ -2,6 +2,7 @@ package selectel
 
 import (
 	"context"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -55,9 +56,9 @@ func TestProvider_GetRecords(t *testing.T) {
 	provider := &Provider{client: client}
 	records, err := provider.GetRecords(ctx, "zone1.org")
 	require.NoError(t, err)
-	assert.ElementsMatch(t, []libdns.RR{
-		{Name: "rrset1", Type: "A", TTL: time.Hour, Data: "2.2.2.2"},
-		{Name: "rrset2", Type: "CNAME", TTL: time.Minute, Data: "rrset1.zone1.org"},
+	assert.ElementsMatch(t, []libdns.Record{
+		libdns.Address{Name: "rrset1", TTL: time.Hour, IP: netip.AddrFrom4([4]byte{2, 2, 2, 2})},
+		libdns.CNAME{Name: "rrset2", TTL: time.Minute, Target: "rrset1.zone1.org"},
 	}, records)
 }
 
@@ -153,37 +154,33 @@ func TestProvider_SetRecords(t *testing.T) {
 
 	provider := &Provider{client: client}
 	records, err := provider.SetRecords(ctx, "zone1.org", []libdns.Record{
-		libdns.RR{
+		libdns.Address{
 			Name: "rrset1",
-			Type: "A",
 			TTL:  time.Hour,
-			Data: "1.1.1.1",
+			IP:   netip.AddrFrom4([4]byte{1, 1, 1, 1}),
 		},
-		libdns.RR{
+		libdns.Address{
 			Name: "rrset1",
-			Type: "A",
 			TTL:  2 * time.Hour,
-			Data: "3.3.3.3",
+			IP:   netip.AddrFrom4([4]byte{3, 3, 3, 3}),
 		},
-		libdns.RR{
-			Name: "rrset1",
-			Type: "CNAME",
-			TTL:  time.Minute,
-			Data: "rrset3.zone1.org",
+		libdns.CNAME{
+			Name:   "rrset1",
+			TTL:    time.Minute,
+			Target: "rrset3.zone1.org",
 		},
-		libdns.RR{
+		libdns.TXT{
 			Name: "rrset3",
-			Type: "TXT",
 			TTL:  time.Minute,
-			Data: "HELLO",
+			Text: "HELLO",
 		},
 	})
 	require.NoError(t, err)
-	assert.ElementsMatch(t, []libdns.RR{
-		{Name: "rrset1", Type: "A", TTL: time.Hour, Data: "1.1.1.1"},
-		{Name: "rrset1", Type: "A", TTL: time.Hour, Data: "3.3.3.3"},
-		{Name: "rrset1", Type: "CNAME", TTL: time.Minute, Data: "rrset3.zone1.org"},
-		{Name: "rrset3", Type: "TXT", TTL: time.Minute, Data: "HELLO"},
+	assert.ElementsMatch(t, []libdns.Record{
+		libdns.Address{Name: "rrset1", TTL: time.Hour, IP: netip.AddrFrom4([4]byte{1, 1, 1, 1})},
+		libdns.Address{Name: "rrset1", TTL: time.Hour, IP: netip.AddrFrom4([4]byte{3, 3, 3, 3})},
+		libdns.CNAME{Name: "rrset1", TTL: time.Minute, Target: "rrset3.zone1.org"},
+		libdns.TXT{Name: "rrset3", TTL: time.Minute, Text: "HELLO"},
 	}, records)
 }
 
@@ -255,36 +252,32 @@ func TestProvider_AppendRecords(t *testing.T) {
 
 	provider := &Provider{client: client}
 	records, err := provider.AppendRecords(ctx, "zone1.org", []libdns.Record{
-		libdns.RR{
+		libdns.Address{
 			Name: "rrset1",
-			Type: "A",
 			TTL:  time.Hour,
-			Data: "2.2.2.2",
+			IP:   netip.AddrFrom4([4]byte{2, 2, 2, 2}),
 		},
-		libdns.RR{
+		libdns.Address{
 			Name: "rrset1",
-			Type: "A",
 			TTL:  time.Hour,
-			Data: "3.3.3.3",
+			IP:   netip.AddrFrom4([4]byte{3, 3, 3, 3}),
 		},
-		libdns.RR{
+		libdns.Address{
 			Name: "rrset1",
-			Type: "A",
 			TTL:  2 * time.Hour,
-			Data: "4.4.4.4",
+			IP:   netip.AddrFrom4([4]byte{4, 4, 4, 4}),
 		},
-		libdns.RR{
+		libdns.TXT{
 			Name: "rrset3",
-			Type: "TXT",
 			TTL:  time.Minute,
-			Data: "HELLO",
+			Text: "HELLO",
 		},
 	})
 	require.NoError(t, err)
-	assert.ElementsMatch(t, []libdns.RR{
-		{Name: "rrset1", Type: "A", TTL: time.Hour, Data: "3.3.3.3"},
-		{Name: "rrset1", Type: "A", TTL: time.Hour, Data: "4.4.4.4"},
-		{Name: "rrset3", Type: "TXT", TTL: time.Minute, Data: "HELLO"},
+	assert.ElementsMatch(t, []libdns.Record{
+		libdns.Address{Name: "rrset1", TTL: time.Hour, IP: netip.AddrFrom4([4]byte{3, 3, 3, 3})},
+		libdns.Address{Name: "rrset1", TTL: time.Hour, IP: netip.AddrFrom4([4]byte{4, 4, 4, 4})},
+		libdns.TXT{Name: "rrset3", TTL: time.Minute, Text: "HELLO"},
 	}, records)
 }
 

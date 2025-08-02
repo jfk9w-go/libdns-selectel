@@ -122,7 +122,7 @@ func (p *Provider) AppendRecords(
 	_, mod, _ := diffRRSets(prev, next)
 	add, _, _ := diffRRSets(next, prev)
 
-	var radd []libdns.Record
+	var radd []libdns.RR
 	for i := range mod {
 		set := &mod[i]
 		next := next[set.Key]
@@ -170,7 +170,7 @@ func (p *Provider) AppendRecords(
 
 	err = p.client.UpdateRRSets(ctx, zone, slices.Values(mod))
 	if !multierr.AppendInto(&errs, errors.Wrap(err, "update RR sets")) {
-		result = append(result, radd...)
+		result = append(result, parseRRs(radd)...)
 	}
 
 	return
@@ -189,7 +189,7 @@ func (p *Provider) DeleteRecords(
 	next := fromRecords(records)
 	_, mod, del := diffRRSets(prev, next)
 
-	var rdel []libdns.Record
+	var rdel []libdns.RR
 	for i := range mod {
 		set := &mod[i]
 		next := next[set.Key]

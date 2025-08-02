@@ -118,11 +118,16 @@ func (s RRSet) toRecords() iter.Seq[libdns.Record] {
 				continue
 			}
 
-			record := libdns.RR{
+			rr := libdns.RR{
 				Name: s.Key.Name,
 				Type: s.Key.Type,
 				TTL:  getTTL(s.TTL),
 				Data: rr.Content,
+			}
+
+			record, err := rr.Parse()
+			if err != nil {
+				record = rr
 			}
 
 			if !yield(record) {
@@ -168,4 +173,18 @@ func toRecords(sets iter.Seq[RRSet]) iter.Seq[libdns.Record] {
 			}
 		}
 	}
+}
+
+func parseRRs(rrs []libdns.RR) []libdns.Record {
+	records := make([]libdns.Record, len(rrs))
+	for i, rr := range rrs {
+		record, err := rr.Parse()
+		if err != nil {
+			record = rr
+		}
+
+		records[i] = record
+	}
+
+	return records
 }
