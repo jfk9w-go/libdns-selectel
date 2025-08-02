@@ -36,7 +36,7 @@ func TestProvider_GetRecords(t *testing.T) {
 	ctx := context.Background()
 	client := NewMockClient(ctrl)
 	client.EXPECT().GetRRSets(ctx, "zone1.org").Return(map[RRSetKey]RRSet{
-		RRSetKey{Name: "rrset1", Type: "A"}: {
+		{Name: "rrset1", Type: "A"}: {
 			Key: RRSetKey{Name: "rrset1", Type: "A"},
 			TTL: time.Hour,
 			RRs: []RR{
@@ -44,7 +44,7 @@ func TestProvider_GetRecords(t *testing.T) {
 				{Content: "2.2.2.2"},
 			},
 		},
-		RRSetKey{Name: "rrset2", Type: "CNAME"}: {
+		{Name: "rrset2", Type: "CNAME"}: {
 			Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
 			TTL: time.Minute,
 			RRs: []RR{
@@ -69,7 +69,7 @@ func TestProvider_SetRecords(t *testing.T) {
 	ctx := context.Background()
 	client := NewMockClient(ctrl)
 	client.EXPECT().GetRRSets(ctx, "zone1.org").Return(map[RRSetKey]RRSet{
-		RRSetKey{Name: "rrset1", Type: "A"}: {
+		{Name: "rrset1", Type: "A"}: {
 			Key: RRSetKey{Name: "rrset1", Type: "A"},
 			ID:  "rrset1-a",
 			TTL: time.Hour,
@@ -79,7 +79,7 @@ func TestProvider_SetRecords(t *testing.T) {
 				{Content: "4.4.4.4", Disabled: true},
 			},
 		},
-		RRSetKey{Name: "rrset2", Type: "CNAME"}: {
+		{Name: "rrset2", Type: "CNAME"}: {
 			Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
 			ID:  "rrset2-cname",
 			TTL: time.Minute,
@@ -87,7 +87,7 @@ func TestProvider_SetRecords(t *testing.T) {
 				{Content: "rrset1.zone1.org"},
 			},
 		},
-		RRSetKey{Name: "rrset4", Type: "TXT"}: {
+		{Name: "rrset4", Type: "TXT"}: {
 			Key: RRSetKey{Name: "rrset4", Type: "TXT"},
 			ID:  "rrset4-txt",
 			TTL: time.Minute,
@@ -112,7 +112,7 @@ func TestProvider_SetRecords(t *testing.T) {
 			},
 		},
 	}}).Return(map[RRSetKey]RRSet{
-		RRSetKey{Name: "rrset1", Type: "CNAME"}: {
+		{Name: "rrset1", Type: "CNAME"}: {
 			Key: RRSetKey{Name: "rrset1", Type: "CNAME"},
 			ID:  "rrset1-cname",
 			TTL: time.Minute,
@@ -120,7 +120,7 @@ func TestProvider_SetRecords(t *testing.T) {
 				{Content: "rrset3.zone1.org"},
 			},
 		},
-		RRSetKey{Name: "rrset3", Type: "TXT"}: {
+		{Name: "rrset3", Type: "TXT"}: {
 			Key: RRSetKey{Name: "rrset3", Type: "TXT"},
 			ID:  "rrset3-txt",
 			TTL: time.Minute,
@@ -191,7 +191,7 @@ func TestProvider_AppendRecords(t *testing.T) {
 	ctx := context.Background()
 	client := NewMockClient(ctrl)
 	client.EXPECT().GetRRSets(ctx, "zone1.org").Return(map[RRSetKey]RRSet{
-		RRSetKey{Name: "rrset1", Type: "A"}: {
+		{Name: "rrset1", Type: "A"}: {
 			Key: RRSetKey{Name: "rrset1", Type: "A"},
 			ID:  "rrset1-a",
 			TTL: time.Hour,
@@ -201,7 +201,7 @@ func TestProvider_AppendRecords(t *testing.T) {
 				{Content: "4.4.4.4", Disabled: true},
 			},
 		},
-		RRSetKey{Name: "rrset2", Type: "CNAME"}: {
+		{Name: "rrset2", Type: "CNAME"}: {
 			Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
 			ID:  "rrset2-cname",
 			TTL: time.Minute,
@@ -209,7 +209,7 @@ func TestProvider_AppendRecords(t *testing.T) {
 				{Content: "rrset1.zone1.org"},
 			},
 		},
-		RRSetKey{Name: "rrset4", Type: "TXT"}: {
+		{Name: "rrset4", Type: "TXT"}: {
 			Key: RRSetKey{Name: "rrset4", Type: "TXT"},
 			ID:  "rrset4-txt",
 			TTL: time.Minute,
@@ -227,7 +227,7 @@ func TestProvider_AppendRecords(t *testing.T) {
 			},
 		},
 	}}).Return(map[RRSetKey]RRSet{
-		RRSetKey{Name: "rrset3", Type: "TXT"}: {
+		{Name: "rrset3", Type: "TXT"}: {
 			Key: RRSetKey{Name: "rrset3", Type: "TXT"},
 			ID:  "rrset3-txt",
 			TTL: time.Minute,
@@ -288,7 +288,7 @@ func TestProvider_DeleteRecords(t *testing.T) {
 	ctx := context.Background()
 	client := NewMockClient(ctrl)
 	client.EXPECT().GetRRSets(ctx, "zone1.org").Return(map[RRSetKey]RRSet{
-		RRSetKey{Name: "rrset1", Type: "A"}: {
+		{Name: "rrset1", Type: "A"}: {
 			Key: RRSetKey{Name: "rrset1", Type: "A"},
 			ID:  "rrset1-a",
 			TTL: time.Hour,
@@ -298,7 +298,7 @@ func TestProvider_DeleteRecords(t *testing.T) {
 				{Content: "4.4.4.4", Disabled: true},
 			},
 		},
-		RRSetKey{Name: "rrset2", Type: "CNAME"}: {
+		{Name: "rrset2", Type: "CNAME"}: {
 			Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
 			ID:  "rrset2-cname",
 			TTL: time.Minute,
@@ -306,7 +306,7 @@ func TestProvider_DeleteRecords(t *testing.T) {
 				{Content: "rrset1.zone1.org"},
 			},
 		},
-		RRSetKey{Name: "rrset4", Type: "TXT"}: {
+		{Name: "rrset4", Type: "TXT"}: {
 			Key: RRSetKey{Name: "rrset4", Type: "TXT"},
 			ID:  "rrset4-txt",
 			TTL: time.Minute,

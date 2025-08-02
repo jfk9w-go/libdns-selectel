@@ -40,11 +40,3 @@ func getTTL(values ...time.Duration) time.Duration {
 
 	return max(result, time.Minute)
 }
-
-func must[T any](value T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-
-	return value
-}

@@ -145,7 +145,7 @@ func TestClient_GetRRSets(t *testing.T) {
 	sets, err := client.GetRRSets(ctx, "zone1.org")
 	require.NoError(t, err)
 	assert.Equal(t, map[RRSetKey]RRSet{
-		RRSetKey{Name: "rrset1", Type: "A"}: {
+		{Name: "rrset1", Type: "A"}: {
 			Key: RRSetKey{Name: "rrset1", Type: "A"},
 			ID:  "rrset1-id",
 			TTL: 120 * time.Second,
@@ -154,7 +154,7 @@ func TestClient_GetRRSets(t *testing.T) {
 				{Content: "2.2.2.2"},
 			},
 		},
-		RRSetKey{Name: "rrset2", Type: "CNAME"}: {
+		{Name: "rrset2", Type: "CNAME"}: {
 			Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
 			ID:  "rrset2-id",
 			TTL: 180 * time.Second,
@@ -235,7 +235,7 @@ func TestClient_CreateRRSets(t *testing.T) {
 	}))
 	require.NoError(t, err)
 	assert.Equal(t, map[RRSetKey]RRSet{
-		RRSetKey{Name: "rrset1", Type: "A"}: {
+		{Name: "rrset1", Type: "A"}: {
 			Key: RRSetKey{Name: "rrset1", Type: "A"},
 			ID:  "rrset1-id",
 			TTL: 120 * time.Second,
@@ -244,7 +244,7 @@ func TestClient_CreateRRSets(t *testing.T) {
 				{Content: "2.2.2.2"},
 			},
 		},
-		RRSetKey{Name: "rrset2", Type: "CNAME"}: {
+		{Name: "rrset2", Type: "CNAME"}: {
 			Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
 			ID:  "rrset2-id",
 			TTL: 60 * time.Second,
