@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/pkg/errors"
 	v2 "github.com/selectel/domains-go/pkg/v2"
 )
@@ -17,17 +18,23 @@ const (
 	defaultLimit  = 100
 )
 
+var validate = validator.New(validator.WithRequiredStructEnabled())
+
 // Credentials describes data required for obtaining project-scoped API token.
 // See https://docs.selectel.ru/en/api/authorization/#iam-token-project-scoped
 type Credentials struct {
 	// Service user name.
-	Username string
+	Username string `validate:"required"`
 	// Service user password.
-	Password string
+	Password string `validate:"required"`
 	// Your account ID.
-	AccountID string
+	AccountID string `validate:"required"`
 	// Name of the project containing required zones.
-	ProjectName string
+	ProjectName string `validate:"required"`
+}
+
+func (c *Credentials) Validate() error {
+	return validate.Struct(c)
 }
 
 type client struct {
