@@ -39,10 +39,10 @@ func (s *RRSet) matchEnabledRRs(other *RRSet) bool {
 	return maps.Equal(s.RRs[enabled], other.RRs[enabled])
 }
 
-func fromSelectel(rrs *v2.RRSet) *RRSet {
+func fromSelectel(rrs *v2.RRSet, zone string) *RRSet {
 	set := &RRSet{
 		Key: RRSetKey{
-			Name: rrs.Name,
+			Name: libdns.RelativeName(rrs.Name, zone),
 			Type: string(rrs.Type),
 		},
 		ID:  rrs.ID,
@@ -65,10 +65,10 @@ func fromSelectel(rrs *v2.RRSet) *RRSet {
 	return set
 }
 
-func (s *RRSet) toSelectel() *v2.RRSet {
+func (s *RRSet) toSelectel(zone string) *v2.RRSet {
 	set := &v2.RRSet{
 		ID:   s.ID,
-		Name: s.Key.Name,
+		Name: libdns.AbsoluteName(s.Key.Name, zone),
 		Type: v2.RecordType(s.Key.Type),
 		TTL:  int(getTTL(s.TTL).Seconds()),
 		Records: slices.Collect(func(yield func(v2.RecordItem) bool) {

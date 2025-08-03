@@ -54,7 +54,7 @@ func (c *client) GetRRSets(ctx context.Context, zone string) (map[RRSetKey]*RRSe
 			return nil, errors.Wrap(err, "get RR sets")
 		}
 
-		set := fromSelectel(rrs)
+		set := fromSelectel(rrs, zone)
 		result[set.Key] = set
 	}
 
@@ -67,7 +67,7 @@ func (c *client) CreateRRSet(ctx context.Context, zone string, set *RRSet) error
 		return errors.Wrap(err, "get zone ID")
 	}
 
-	rrs, err := c.dns.CreateRRSet(ctx, zoneID, set.toSelectel())
+	rrs, err := c.dns.CreateRRSet(ctx, zoneID, set.toSelectel(zone))
 	if err != nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func (c *client) UpdateRRSet(ctx context.Context, zone string, set *RRSet) error
 		return errors.Wrap(err, "get zone ID")
 	}
 
-	return c.dns.UpdateRRSet(ctx, zoneID, set.ID, set.toSelectel())
+	return c.dns.UpdateRRSet(ctx, zoneID, set.ID, set.toSelectel(zone))
 }
 
 func (c *client) DeleteRRSet(ctx context.Context, zone string, setID string) error {

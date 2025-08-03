@@ -23,8 +23,8 @@ func TestClient_GetZones(t *testing.T) {
 	}).DoAndReturn(func(context.Context, *map[string]string) (v2.Listable[v2.Zone], error) {
 		list := NewMockListable[v2.Zone](ctrl)
 		list.EXPECT().GetItems().Return([]*v2.Zone{
-			{Name: "zone1.org", ID: "zone1-id"},
-			{Name: "zone2.org", ID: "zone2-id"},
+			{Name: "zone1.org.", ID: "zone1-id"},
+			{Name: "zone2.org.", ID: "zone2-id"},
 		})
 		list.EXPECT().GetCount().Return(2)
 		return list, nil
@@ -38,10 +38,10 @@ func TestClient_GetZones(t *testing.T) {
 
 	zones, err := client.GetZones(ctx)
 	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"zone1.org", "zone2.org"}, zones)
+	assert.ElementsMatch(t, []string{"zone1.org.", "zone2.org."}, zones)
 	assert.Equal(t, map[string]string{
-		"zone1.org": "zone1-id",
-		"zone2.org": "zone2-id",
+		"zone1.org.": "zone1-id",
+		"zone2.org.": "zone2-id",
 	}, client.zones)
 }
 
@@ -57,8 +57,8 @@ func TestClient_GetZones_Pagination(t *testing.T) {
 	}).DoAndReturn(func(context.Context, *map[string]string) (v2.Listable[v2.Zone], error) {
 		list := NewMockListable[v2.Zone](ctrl)
 		list.EXPECT().GetItems().Return([]*v2.Zone{
-			{Name: "zone1.org", ID: "zone1-id"},
-			{Name: "zone2.org", ID: "zone2-id"},
+			{Name: "zone1.org.", ID: "zone1-id"},
+			{Name: "zone2.org.", ID: "zone2-id"},
 		})
 		list.EXPECT().GetCount().Return(2)
 		list.EXPECT().GetNextOffset().Return(2)
@@ -84,7 +84,7 @@ func TestClient_GetZones_Pagination(t *testing.T) {
 
 	zones, err := client.GetZones(ctx)
 	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"zone1.org", "zone2.org", "zone3.org"}, zones)
+	assert.ElementsMatch(t, []string{"zone1.org.", "zone2.org.", "zone3.org"}, zones)
 }
 
 func TestClient_GetRRSets(t *testing.T) {
@@ -96,11 +96,11 @@ func TestClient_GetRRSets(t *testing.T) {
 	dns.EXPECT().ListZones(ctx, &map[string]string{
 		"offset": "0",
 		"limit":  "10",
-		"filter": "zone1.org",
+		"filter": "zone1.org.",
 	}).DoAndReturn(func(context.Context, *map[string]string) (v2.Listable[v2.Zone], error) {
 		list := NewMockListable[v2.Zone](ctrl)
 		list.EXPECT().GetItems().Return([]*v2.Zone{
-			{Name: "zone1.org", ID: "zone1-id"},
+			{Name: "zone1.org.", ID: "zone1-id"},
 		})
 		list.EXPECT().GetCount().Return(1)
 		return list, nil
@@ -112,7 +112,7 @@ func TestClient_GetRRSets(t *testing.T) {
 		list := NewMockListable[v2.RRSet](ctrl)
 		list.EXPECT().GetItems().Return([]*v2.RRSet{
 			{
-				Name: "rrset1",
+				Name: "rrset1.zone1.org.",
 				ID:   "rrset1-id",
 				TTL:  120,
 				Type: "A",
@@ -122,12 +122,12 @@ func TestClient_GetRRSets(t *testing.T) {
 				},
 			},
 			{
-				Name: "rrset2",
+				Name: "rrset2.zone1.org.",
 				ID:   "rrset2-id",
 				TTL:  180,
 				Type: "CNAME",
 				Records: []v2.RecordItem{
-					{Content: "rrset1.zone1.org"},
+					{Content: "rrset1.zone1.org."},
 				},
 			},
 		})
@@ -141,7 +141,7 @@ func TestClient_GetRRSets(t *testing.T) {
 		zones: make(map[string]string),
 	}
 
-	sets, err := client.GetRRSets(ctx, "zone1.org")
+	sets, err := client.GetRRSets(ctx, "zone1.org.")
 	require.NoError(t, err)
 	assert.Equal(t, map[RRSetKey]*RRSet{
 		{Name: "rrset1", Type: "A"}: {
@@ -158,12 +158,12 @@ func TestClient_GetRRSets(t *testing.T) {
 			ID:  "rrset2-id",
 			TTL: 180 * time.Second,
 			RRs: RRs{
-				enabled: SetOf("rrset1.zone1.org"),
+				enabled: SetOf("rrset1.zone1.org."),
 			},
 		},
 	}, sets)
 	assert.Equal(t, map[string]string{
-		"zone1.org": "zone1-id",
+		"zone1.org.": "zone1-id",
 	}, client.zones)
 }
 
@@ -174,7 +174,7 @@ func TestClient_CreateRRSets(t *testing.T) {
 	ctx := context.Background()
 	dns := NewMockDNSClient(ctrl)
 	dns.EXPECT().CreateRRSet(ctx, "zone1-id", &v2.RRSet{
-		Name: "rrset1",
+		Name: "rrset1.zone1.org.",
 		TTL:  120,
 		Type: "A",
 		Records: []v2.RecordItem{
@@ -182,7 +182,7 @@ func TestClient_CreateRRSets(t *testing.T) {
 			{Content: "2.2.2.2"},
 		},
 	}).Return(&v2.RRSet{
-		Name: "rrset1",
+		Name: "rrset1.zone1.org.",
 		ID:   "rrset1-id",
 		TTL:  120,
 		Type: "A",
@@ -192,19 +192,19 @@ func TestClient_CreateRRSets(t *testing.T) {
 		},
 	}, nil)
 	dns.EXPECT().CreateRRSet(ctx, "zone1-id", &v2.RRSet{
-		Name: "rrset2",
+		Name: "rrset2.zone1.org.",
 		TTL:  60,
 		Type: "CNAME",
 		Records: []v2.RecordItem{
-			{Content: "rrset1.zone1.org"},
+			{Content: "rrset1.zone1.org."},
 		},
 	}).Return(&v2.RRSet{
-		Name: "rrset2",
+		Name: "rrset2.zone1.org.",
 		ID:   "rrset2-id",
 		TTL:  60,
 		Type: "CNAME",
 		Records: []v2.RecordItem{
-			{Content: "rrset1.zone1.org"},
+			{Content: "rrset1.zone1.org."},
 		},
 	}, nil)
 
@@ -212,7 +212,7 @@ func TestClient_CreateRRSets(t *testing.T) {
 		dns:   dns,
 		limit: 10,
 		zones: map[string]string{
-			"zone1.org": "zone1-id",
+			"zone1.org.": "zone1-id",
 		},
 	}
 
@@ -230,18 +230,18 @@ func TestClient_CreateRRSets(t *testing.T) {
 		},
 	}
 
-	err = client.CreateRRSet(ctx, "zone1.org", set)
+	err = client.CreateRRSet(ctx, "zone1.org.", set)
 	require.NoError(t, err)
 	assert.Equal(t, "rrset1-id", set.ID)
 
 	set = &RRSet{
 		Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
 		RRs: RRs{
-			enabled: SetOf("rrset1.zone1.org"),
+			enabled: SetOf("rrset1.zone1.org."),
 		},
 	}
 
-	err = client.CreateRRSet(ctx, "zone1.org", set)
+	err = client.CreateRRSet(ctx, "zone1.org.", set)
 	require.NoError(t, err)
 	assert.Equal(t, "rrset2-id", set.ID)
 }
@@ -253,7 +253,7 @@ func TestClient_UpdateRRSets(t *testing.T) {
 	ctx := context.Background()
 	dns := NewMockDNSClient(ctrl)
 	dns.EXPECT().UpdateRRSet(ctx, "zone1-id", "rrset1-id", &v2.RRSet{
-		Name: "rrset1",
+		Name: "rrset1.zone1.org.",
 		ID:   "rrset1-id",
 		TTL:  120,
 		Type: "A",
@@ -267,7 +267,7 @@ func TestClient_UpdateRRSets(t *testing.T) {
 		dns:   dns,
 		limit: 10,
 		zones: map[string]string{
-			"zone1.org": "zone1-id",
+			"zone1.org.": "zone1-id",
 		},
 	}
 
@@ -286,7 +286,7 @@ func TestClient_UpdateRRSets(t *testing.T) {
 		},
 	}
 
-	err = client.UpdateRRSet(ctx, "zone1.org", set)
+	err = client.UpdateRRSet(ctx, "zone1.org.", set)
 	require.NoError(t, err)
 }
 
@@ -302,10 +302,10 @@ func TestClient_DeleteRRSets(t *testing.T) {
 		dns:   dns,
 		limit: 10,
 		zones: map[string]string{
-			"zone1.org": "zone1-id",
+			"zone1.org.": "zone1-id",
 		},
 	}
 
-	err := client.DeleteRRSet(ctx, "zone1.org", "rrset1-id")
+	err := client.DeleteRRSet(ctx, "zone1.org.", "rrset1-id")
 	require.NoError(t, err)
 }
