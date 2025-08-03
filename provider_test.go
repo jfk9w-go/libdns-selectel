@@ -267,7 +267,7 @@ func TestProvider_DeleteRecords(t *testing.T) {
 	ctx := context.Background()
 	client := NewMockClient(ctrl)
 
-	client.EXPECT().GetRRSets(ctx, "zone1.org").Return(map[RRSetKey]RRSet{
+	client.EXPECT().GetRRSets(ctx, "zone1.org").Return(map[RRSetKey]*RRSet{
 		{Name: "rrset1", Type: "A"}: {
 			Key: RRSetKey{Name: "rrset1", Type: "A"},
 			ID:  "rrset1-a",
@@ -290,32 +290,40 @@ func TestProvider_DeleteRecords(t *testing.T) {
 			ID:  "rrset4-txt",
 			TTL: time.Minute,
 			RRs: RRs{
+				enabled:  SetOf("HELLO"),
 				disabled: SetOf("GOODBYE"),
 			},
 		},
 	}, nil)
-	//
-	//client.EXPECT().DeleteRRSets(ctx, "zone1.org", SeqMatcher[RRSet]{t, []RRSet{
-	//	{
-	//		Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
-	//		ID:  "rrset2-cname",
-	//		TTL: time.Minute,
-	//		RRs: []RR{
-	//			{Content: "rrset1.zone1.org"},
-	//		},
-	//	},
-	//}}).Return(nil)
-	//client.EXPECT().UpdateRRSets(ctx, "zone1.org", SeqMatcher[RRSet]{t, []RRSet{
-	//	{
-	//		Key: RRSetKey{Name: "rrset1", Type: "A"},
-	//		ID:  "rrset1-a",
-	//		TTL: time.Hour,
-	//		RRs: []RR{
-	//			{Content: "1.1.1.1", Disabled: true},
-	//			{Content: "4.4.4.4", Disabled: true},
-	//		},
-	//	},
-	//}}).Return(nil)
+
+	for _, setID := range []string{
+		"rrset2-cname",
+	} {
+		client.EXPECT().DeleteRRSet(ctx, "zone1.org", setID).Return(nil)
+	}
+
+	for _, set := range []*RRSet{
+		{
+			Key: RRSetKey{Name: "rrset1", Type: "A"},
+			ID:  "rrset1-a",
+			TTL: time.Hour,
+			RRs: RRs{
+				enabled:  SetOf[string](),
+				disabled: SetOf("1.1.1.1", "4.4.4.4"),
+			},
+		},
+		{
+			Key: RRSetKey{Name: "rrset4", Type: "TXT"},
+			ID:  "rrset4-txt",
+			TTL: time.Minute,
+			RRs: RRs{
+				enabled:  SetOf[string](),
+				disabled: SetOf("GOODBYE"),
+			},
+		},
+	} {
+		client.EXPECT().UpdateRRSet(ctx, "zone1.org", set).Return(nil)
+	}
 
 	provider := &Provider{client: client}
 	records, err := provider.DeleteRecords(ctx, "zone1.org", []libdns.Record{
@@ -339,16 +347,14 @@ func TestProvider_DeleteRecords(t *testing.T) {
 			TTL:    time.Minute,
 			Target: "rrset1.zone1.org",
 		},
-		libdns.TXT{
+		libdns.RR{
 			Name: "rrset4",
-			TTL:  time.Minute,
-			Text: "HELLO",
 		},
 	})
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []libdns.Record{
-		libdns.Address{Name: "rrset1", TTL: time.Hour, IP: netip.AddrFrom4([4]byte{3, 3, 3, 3})},
-		libdns.Address{Name: "rrset1", TTL: time.Hour, IP: netip.AddrFrom4([4]byte{4, 4, 4, 4})},
+		libdns.Address{Name: "rrset1", TTL: time.Hour, IP: netip.AddrFrom4([4]byte{2, 2, 2, 2})},
 		libdns.CNAME{Name: "rrset2", TTL: time.Minute, Target: "rrset1.zone1.org"},
+		libdns.TXT{Name: "rrset4", TTL: time.Minute, Text: "HELLO"},
 	}, records)
 }

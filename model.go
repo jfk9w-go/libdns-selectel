@@ -35,8 +35,8 @@ type RRSet struct {
 	RRs RRs
 }
 
-func (s *RRSet) match(other *RRSet) bool {
-	return s.TTL == other.TTL && maps.Equal(s.RRs[enabled], other.RRs[enabled])
+func (s *RRSet) matchEnabledRRs(other *RRSet) bool {
+	return maps.Equal(s.RRs[enabled], other.RRs[enabled])
 }
 
 func fromSelectel(rrs *v2.RRSet) *RRSet {

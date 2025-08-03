@@ -59,8 +59,7 @@ func (p *Provider) SetRecords(
 	next := fromRecords(records)
 
 	for key, next := range next {
-		_, ok := prev[key]
-		if ok {
+		if _, ok := prev[key]; ok {
 			continue
 		}
 
@@ -85,7 +84,7 @@ func (p *Provider) SetRecords(
 				next = new(RRSet)
 			}
 
-		case !prev.match(next):
+		case prev.TTL != next.TTL || !prev.matchEnabledRRs(next):
 			prev.TTL = next.TTL
 			prev.RRs[enabled] = next.RRs[enabled]
 			for data := range prev.RRs[enabled] {
@@ -118,8 +117,7 @@ func (p *Provider) AppendRecords(
 	next := fromRecords(records)
 
 	for key, next := range next {
-		_, ok := prev[key]
-		if ok {
+		if _, ok := prev[key]; ok {
 			continue
 		}
 
@@ -136,21 +134,18 @@ func (p *Provider) AppendRecords(
 		}
 
 		var radd []libdns.Record
-		update := prev.TTL == next.TTL
-		prev.TTL = next.TTL
 		for data := range next.RRs[enabled] {
 			if prev.RRs[enabled][data] {
 				continue
 			}
 
-			update = true
 			prev.RRs[enabled][data] = true
 			delete(prev.RRs[disabled], data)
 
 			rr := libdns.RR{
 				Name: prev.Key.Name,
 				Type: prev.Key.Type,
-				TTL:  prev.TTL,
+				TTL:  next.TTL,
 				Data: data,
 			}
 
@@ -162,9 +157,11 @@ func (p *Provider) AppendRecords(
 			}
 		}
 
-		if !update {
+		if len(radd) == 0 || prev.TTL != next.TTL {
 			continue
 		}
+
+		prev.TTL = next.TTL
 
 		err := p.client.UpdateRRSet(ctx, zone, prev)
 		if !multierr.AppendInto(&errs, errors.Wrapf(err, "update %s", prev.Key)) {
@@ -180,12 +177,61 @@ func (p *Provider) DeleteRecords(
 	zone string,
 	records []libdns.Record,
 ) (result []libdns.Record, errs error) {
-	_, err := p.client.GetRRSets(ctx, zone)
+	prev, err := p.client.GetRRSets(ctx, zone)
 	if err != nil {
 		return nil, errors.Wrap(err, "get RR sets")
 	}
 
-	_ = fromRecords(records)
+	next := fromRecords(records)
+
+	for key, prev := range prev {
+		del, ok := next[key]
+		if !ok {
+			key := key
+			key.Type = ""
+			del, ok = next[key]
+		}
+
+		var rdel []libdns.Record
+		for data := range prev.RRs[enabled] {
+			if del.RRs[enabled][data] || del.RRs[enabled][""] {
+				delete(prev.RRs[enabled], data)
+
+				rr := libdns.RR{
+					Name: prev.Key.Name,
+					Type: prev.Key.Type,
+					TTL:  prev.TTL,
+					Data: data,
+				}
+
+				record, err := rr.Parse()
+				if err != nil {
+					rdel = append(rdel, rr)
+				} else {
+					rdel = append(rdel, record)
+				}
+			}
+		}
+
+		switch {
+		case len(rdel) == 0:
+			continue
+
+		case len(prev.RRs[enabled]) > 0 || len(prev.RRs[disabled]) > 0:
+			err := p.client.UpdateRRSet(ctx, zone, prev)
+			if !multierr.AppendInto(&errs, errors.Wrapf(err, "update %s", prev.Key)) {
+				result = append(result, rdel...)
+			}
+
+			continue
+
+		default:
+			err := p.client.DeleteRRSet(ctx, zone, prev.ID)
+			if !multierr.AppendInto(&errs, errors.Wrapf(err, "delete %s", prev.Key)) {
+				result = append(result, rdel...)
+			}
+		}
+	}
 
 	return
 }
