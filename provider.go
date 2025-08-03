@@ -84,8 +84,9 @@ func (p *Provider) SetRecords(
 				next = new(RRSet)
 			}
 
-		case prev.TTL != next.TTL || !prev.matchEnabledRRs(next):
-			prev.TTL = next.TTL
+		case prev.TTL != getTTL(prev.TTL, next.TTL) ||
+			!prev.matchEnabledRRs(next):
+			prev.TTL = getTTL(prev.TTL, next.TTL)
 			prev.RRs[enabled] = next.RRs[enabled]
 			for data := range prev.RRs[enabled] {
 				delete(prev.RRs[disabled], data)

@@ -95,6 +95,14 @@ func TestProvider_SetRecords(t *testing.T) {
 				disabled: SetOf("GOODBYE"),
 			},
 		},
+		{Name: "rrset5", Type: "TXT"}: {
+			Key: RRSetKey{Name: "rrset5", Type: "TXT"},
+			ID:  "rrset5-txt",
+			TTL: time.Minute,
+			RRs: RRs{
+				enabled: SetOf("HELLO"),
+			},
+		},
 	}, nil)
 
 	for _, set := range []*RRSet{
@@ -155,6 +163,11 @@ func TestProvider_SetRecords(t *testing.T) {
 		},
 		libdns.TXT{
 			Name: "rrset3",
+			TTL:  time.Minute,
+			Text: "HELLO",
+		},
+		libdns.TXT{
+			Name: "rrset5",
 			TTL:  time.Minute,
 			Text: "HELLO",
 		},
