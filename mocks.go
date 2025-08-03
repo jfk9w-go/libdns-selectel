@@ -71,10 +71,10 @@ func (mr *MockDNSClientMockRecorder) DeleteRRSet(ctx, zoneID, rrsetid any) *gomo
 }
 
 // ListRRSets mocks base method.
-func (m *MockDNSClient) ListRRSets(ctx context.Context, zoneID string, params *map[string]string) (Listable[v2.RRSet], error) {
+func (m *MockDNSClient) ListRRSets(ctx context.Context, zoneID string, params *map[string]string) (v2.Listable[v2.RRSet], error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListRRSets", ctx, zoneID, params)
-	ret0, _ := ret[0].(Listable[v2.RRSet])
+	ret0, _ := ret[0].(v2.Listable[v2.RRSet])
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -86,10 +86,10 @@ func (mr *MockDNSClientMockRecorder) ListRRSets(ctx, zoneID, params any) *gomock
 }
 
 // ListZones mocks base method.
-func (m *MockDNSClient) ListZones(ctx context.Context, params *map[string]string) (Listable[v2.Zone], error) {
+func (m *MockDNSClient) ListZones(ctx context.Context, params *map[string]string) (v2.Listable[v2.Zone], error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListZones", ctx, params)
-	ret0, _ := ret[0].(Listable[v2.Zone])
+	ret0, _ := ret[0].(v2.Listable[v2.Zone])
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

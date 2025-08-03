@@ -12,7 +12,17 @@ import (
 	v2 "github.com/selectel/domains-go/pkg/v2"
 )
 
-const defaultLimit = 100
+const (
+	domainsApiURL = "https://api.selectel.ru/domains/v2"
+	defaultLimit  = 100
+)
+
+type Credentials struct {
+	Username    string
+	Password    string
+	AccountID   string
+	ProjectName string
+}
 
 type client struct {
 	dns   DNSClient
@@ -21,9 +31,9 @@ type client struct {
 	mu    sync.RWMutex
 }
 
-func NewClient(dns DNSClient) Client {
+func NewClient(creds Credentials) Client {
 	return &client{
-		dns:   dns,
+		dns:   newWrapper(creds),
 		limit: defaultLimit,
 		zones: make(map[string]string),
 	}

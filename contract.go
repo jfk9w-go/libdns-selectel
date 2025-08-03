@@ -10,8 +10,8 @@ import (
 type Listable[T any] = v2.Listable[T]
 
 type DNSClient interface {
-	ListZones(ctx context.Context, params *map[string]string) (Listable[v2.Zone], error)
-	ListRRSets(ctx context.Context, zoneID string, params *map[string]string) (Listable[v2.RRSet], error)
+	ListZones(ctx context.Context, params *map[string]string) (v2.Listable[v2.Zone], error)
+	ListRRSets(ctx context.Context, zoneID string, params *map[string]string) (v2.Listable[v2.RRSet], error)
 	CreateRRSet(ctx context.Context, zoneID string, rrset v2.Creatable) (*v2.RRSet, error)
 	UpdateRRSet(ctx context.Context, zoneID string, rrsetid string, rrset v2.Updatable) error
 	DeleteRRSet(ctx context.Context, zoneID string, rrsetid string) error
