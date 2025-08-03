@@ -204,6 +204,10 @@ func (p *Provider) DeleteRecords(
 			del, ok = next[key]
 		}
 
+		if !ok {
+			continue
+		}
+
 		var rdel []libdns.Record
 		for data := range prev.RRs[enabled] {
 			if del.RRs[enabled][data] || del.RRs[enabled][""] {

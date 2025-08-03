@@ -298,6 +298,14 @@ func TestProvider_DeleteRecords(t *testing.T) {
 				enabled: SetOf("rrset1.zone1.org."),
 			},
 		},
+		{Name: "rrset3", Type: "TXT"}: {
+			Key: RRSetKey{Name: "rrset3", Type: "TXT"},
+			ID:  "rrset3-txt",
+			TTL: time.Minute,
+			RRs: RRs{
+				enabled: SetOf("TEST"),
+			},
+		},
 		{Name: "rrset4", Type: "TXT"}: {
 			Key: RRSetKey{Name: "rrset4", Type: "TXT"},
 			ID:  "rrset4-txt",
