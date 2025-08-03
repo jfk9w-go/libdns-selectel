@@ -3,6 +3,7 @@ package selectel
 import (
 	"context"
 	"slices"
+	"sync"
 
 	"github.com/libdns/libdns"
 	"github.com/pkg/errors"
@@ -11,16 +12,20 @@ import (
 
 // Provider implements libdns.Provider.
 type Provider struct {
-	client Client
+	Credentials Credentials
+
+	_client Client
+	once    sync.Once
 }
 
-// NewProvider creates a Provider.
+// NewProvider creates a Provider with a specified Client.
+// Setting Credentials is unnecessary in this case.
 func NewProvider(client Client) *Provider {
-	return &Provider{client: client}
+	return &Provider{_client: client}
 }
 
 func (p *Provider) ListZones(ctx context.Context) ([]libdns.Zone, error) {
-	zones, err := p.client.GetZones(ctx)
+	zones, err := p.client().GetZones(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "get zones")
 	}
@@ -36,7 +41,7 @@ func (p *Provider) ListZones(ctx context.Context) ([]libdns.Zone, error) {
 }
 
 func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record, error) {
-	sets, err := p.client.GetRRSets(ctx, zone)
+	sets, err := p.client().GetRRSets(ctx, zone)
 	if err != nil {
 		return nil, errors.Wrap(err, "get RR sets")
 	}
@@ -57,7 +62,7 @@ func (p *Provider) SetRecords(
 	zone string,
 	records []libdns.Record,
 ) (result []libdns.Record, errs error) {
-	prev, err := p.client.GetRRSets(ctx, zone)
+	prev, err := p.client().GetRRSets(ctx, zone)
 	if err != nil {
 		return nil, errors.Wrap(err, "get RR sets")
 	}
@@ -69,7 +74,7 @@ func (p *Provider) SetRecords(
 			continue
 		}
 
-		err := p.client.CreateRRSet(ctx, zone, next)
+		err := p.client().CreateRRSet(ctx, zone, next)
 		if !multierr.AppendInto(&errs, errors.Wrapf(err, "create %s", key)) {
 			result = append(result, slices.Collect(next.toRecords())...)
 		}
@@ -83,7 +88,7 @@ func (p *Provider) SetRecords(
 			case len(prev.RRs[enabled]) == 0:
 				continue
 			case len(prev.RRs[disabled]) == 0:
-				err := p.client.DeleteRRSet(ctx, zone, prev.ID)
+				err := p.client().DeleteRRSet(ctx, zone, prev.ID)
 				_ = multierr.AppendInto(&errs, errors.Wrapf(err, "delete %s", prev.Key))
 				continue
 			default:
@@ -102,7 +107,7 @@ func (p *Provider) SetRecords(
 			continue
 		}
 
-		err := p.client.UpdateRRSet(ctx, zone, prev)
+		err := p.client().UpdateRRSet(ctx, zone, prev)
 		if !multierr.AppendInto(&errs, errors.Wrapf(err, "update %s", prev.Key)) {
 			result = append(result, slices.Collect(prev.toRecords())...)
 		}
@@ -116,7 +121,7 @@ func (p *Provider) AppendRecords(
 	zone string,
 	records []libdns.Record,
 ) (result []libdns.Record, errs error) {
-	prev, err := p.client.GetRRSets(ctx, zone)
+	prev, err := p.client().GetRRSets(ctx, zone)
 	if err != nil {
 		return nil, errors.Wrap(err, "get RR sets")
 	}
@@ -128,7 +133,7 @@ func (p *Provider) AppendRecords(
 			continue
 		}
 
-		err := p.client.CreateRRSet(ctx, zone, next)
+		err := p.client().CreateRRSet(ctx, zone, next)
 		if !multierr.AppendInto(&errs, errors.Wrapf(err, "create %s", key)) {
 			result = append(result, slices.Collect(next.toRecords())...)
 		}
@@ -170,7 +175,7 @@ func (p *Provider) AppendRecords(
 
 		prev.TTL = next.TTL
 
-		err := p.client.UpdateRRSet(ctx, zone, prev)
+		err := p.client().UpdateRRSet(ctx, zone, prev)
 		if !multierr.AppendInto(&errs, errors.Wrapf(err, "update %s", prev.Key)) {
 			result = append(result, radd...)
 		}
@@ -184,7 +189,7 @@ func (p *Provider) DeleteRecords(
 	zone string,
 	records []libdns.Record,
 ) (result []libdns.Record, errs error) {
-	prev, err := p.client.GetRRSets(ctx, zone)
+	prev, err := p.client().GetRRSets(ctx, zone)
 	if err != nil {
 		return nil, errors.Wrap(err, "get RR sets")
 	}
@@ -225,7 +230,7 @@ func (p *Provider) DeleteRecords(
 			continue
 
 		case len(prev.RRs[enabled]) > 0 || len(prev.RRs[disabled]) > 0:
-			err := p.client.UpdateRRSet(ctx, zone, prev)
+			err := p.client().UpdateRRSet(ctx, zone, prev)
 			if !multierr.AppendInto(&errs, errors.Wrapf(err, "update %s", prev.Key)) {
 				result = append(result, rdel...)
 			}
@@ -233,7 +238,7 @@ func (p *Provider) DeleteRecords(
 			continue
 
 		default:
-			err := p.client.DeleteRRSet(ctx, zone, prev.ID)
+			err := p.client().DeleteRRSet(ctx, zone, prev.ID)
 			if !multierr.AppendInto(&errs, errors.Wrapf(err, "delete %s", prev.Key)) {
 				result = append(result, rdel...)
 			}
@@ -241,6 +246,18 @@ func (p *Provider) DeleteRecords(
 	}
 
 	return
+}
+
+func (p *Provider) client() Client {
+	p.once.Do(func() {
+		if p._client != nil {
+			return
+		}
+
+		p._client = NewClient(p.Credentials)
+	})
+
+	return p._client
 }
 
 // type guards

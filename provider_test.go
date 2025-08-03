@@ -20,7 +20,7 @@ func TestProvider_ListZones(t *testing.T) {
 	client := NewMockClient(ctrl)
 	client.EXPECT().GetZones(ctx).Return([]string{"zone1.org.", "zone2.org."}, nil)
 
-	provider := &Provider{client: client}
+	provider := NewProvider(client)
 	zones, err := provider.ListZones(ctx)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []libdns.Zone{
@@ -53,7 +53,7 @@ func TestProvider_GetRecords(t *testing.T) {
 		},
 	}, nil)
 
-	provider := &Provider{client: client}
+	provider := NewProvider(client)
 	records, err := provider.GetRecords(ctx, "zone1.org.")
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []libdns.Record{
@@ -144,7 +144,7 @@ func TestProvider_SetRecords(t *testing.T) {
 		client.EXPECT().DeleteRRSet(ctx, "zone1.org.", setID).Return(nil)
 	}
 
-	provider := &Provider{client: client}
+	provider := NewProvider(client)
 	records, err := provider.SetRecords(ctx, "zone1.org.", []libdns.Record{
 		libdns.Address{
 			Name: "rrset1",
@@ -242,7 +242,7 @@ func TestProvider_AppendRecords(t *testing.T) {
 		client.EXPECT().UpdateRRSet(ctx, "zone1.org.", set).Return(nil)
 	}
 
-	provider := &Provider{client: client}
+	provider := NewProvider(client)
 	records, err := provider.AppendRecords(ctx, "zone1.org.", []libdns.Record{
 		libdns.Address{
 			Name: "rrset1",
@@ -338,7 +338,7 @@ func TestProvider_DeleteRecords(t *testing.T) {
 		client.EXPECT().UpdateRRSet(ctx, "zone1.org.", set).Return(nil)
 	}
 
-	provider := &Provider{client: client}
+	provider := NewProvider(client)
 	records, err := provider.DeleteRecords(ctx, "zone1.org.", []libdns.Record{
 		libdns.Address{
 			Name: "rrset1",
