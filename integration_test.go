@@ -9,6 +9,7 @@ import (
 	"github.com/caarlos0/env/v11"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/joho/godotenv"
+	"github.com/libdns/libdns"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,6 +42,13 @@ func TestProvider(t *testing.T) {
 
 	if len(zones) > 0 {
 		records, err := provider.GetRecords(ctx, zones[0].Name)
+		require.NoError(t, err)
+		spew.Dump(records)
+
+		records, err = provider.AppendRecords(ctx, zones[0].Name, []libdns.Record{
+			libdns.TXT{Name: "libdns-integration-test", Text: `4"5"6`},
+		})
+
 		require.NoError(t, err)
 		spew.Dump(records)
 	}

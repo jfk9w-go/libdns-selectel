@@ -6,6 +6,7 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/libdns/libdns"
@@ -59,7 +60,13 @@ func fromSelectel(rrs *v2.RRSet, zone string) *RRSet {
 			set.RRs[idx] = make(Set[string])
 		}
 
-		set.RRs[idx][record.Content] = true
+		data := record.Content
+		if rrs.Type == "TXT" {
+			data = strings.TrimPrefix(strings.TrimSuffix(data, `"`), `"`)
+			data = strings.NewReplacer(`\"`, `"`).Replace(data)
+		}
+
+		set.RRs[idx][data] = true
 	}
 
 	return set
@@ -75,6 +82,10 @@ func (s *RRSet) toSelectel(zone string) *v2.RRSet {
 			for idx := range s.RRs {
 				disabled := idx == disabled
 				for data := range s.RRs[idx] {
+					if s.Key.Type == "TXT" {
+						data = `"` + strings.NewReplacer(`"`, `\"`).Replace(data) + `"`
+					}
+
 					record := v2.RecordItem{
 						Disabled: disabled,
 						Content:  data,

@@ -194,17 +194,17 @@ func TestClient_CreateRRSets(t *testing.T) {
 	dns.EXPECT().CreateRRSet(ctx, "zone1-id", &v2.RRSet{
 		Name: "rrset2.zone1.org.",
 		TTL:  60,
-		Type: "CNAME",
+		Type: "TXT",
 		Records: []v2.RecordItem{
-			{Content: "rrset1.zone1.org."},
+			{Content: `"1\"2\"3"`},
 		},
 	}).Return(&v2.RRSet{
 		Name: "rrset2.zone1.org.",
 		ID:   "rrset2-id",
 		TTL:  60,
-		Type: "CNAME",
+		Type: "TXT",
 		Records: []v2.RecordItem{
-			{Content: "rrset1.zone1.org."},
+			{Content: `"1\"2\"3"`},
 		},
 	}, nil)
 
@@ -235,9 +235,9 @@ func TestClient_CreateRRSets(t *testing.T) {
 	assert.Equal(t, "rrset1-id", set.ID)
 
 	set = &RRSet{
-		Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
+		Key: RRSetKey{Name: "rrset2", Type: "TXT"},
 		RRs: RRs{
-			enabled: SetOf("rrset1.zone1.org."),
+			enabled: SetOf(`1"2"3`),
 		},
 	}
 
