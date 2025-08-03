@@ -9,8 +9,14 @@ import (
 	"go.uber.org/multierr"
 )
 
+// Provider implements libdns.Provider.
 type Provider struct {
 	client Client
+}
+
+// NewProvider creates a Provider.
+func NewProvider(client Client) *Provider {
+	return &Provider{client: client}
 }
 
 func (p *Provider) ListZones(ctx context.Context) ([]libdns.Zone, error) {
@@ -236,6 +242,8 @@ func (p *Provider) DeleteRecords(
 
 	return
 }
+
+// type guards
 
 var (
 	_ libdns.ZoneLister     = (*Provider)(nil)

@@ -17,10 +17,16 @@ const (
 	defaultLimit  = 100
 )
 
+// Credentials describes data required for obtaining project-scoped API token.
+// See https://docs.selectel.ru/en/api/authorization/#iam-token-project-scoped
 type Credentials struct {
-	Username    string
-	Password    string
-	AccountID   string
+	// Service user name.
+	Username string
+	// Service user password.
+	Password string
+	// Your account ID.
+	AccountID string
+	// Name of the project containing required zones.
 	ProjectName string
 }
 
@@ -31,6 +37,8 @@ type client struct {
 	mu    sync.RWMutex
 }
 
+// NewClient creates a Selectel DNS API client.
+// It handles retries and obtaining a project-scoped token for managing DNS zones & records.
 func NewClient(creds Credentials) Client {
 	return &client{
 		dns:   newWrapper(creds),
@@ -39,6 +47,7 @@ func NewClient(creds Credentials) Client {
 	}
 }
 
+// GetZones retrieves zone names and IDs for the project and caches them.
 func (c *client) GetZones(ctx context.Context) ([]string, error) {
 	zoneIDs, err := c.getZoneIDs(ctx, "")
 	if err != nil {
@@ -48,6 +57,7 @@ func (c *client) GetZones(ctx context.Context) ([]string, error) {
 	return slices.Collect(maps.Keys(zoneIDs)), nil
 }
 
+// GetRRSets retrieves RR sets for the specified zone name.
 func (c *client) GetRRSets(ctx context.Context, zone string) (map[RRSetKey]*RRSet, error) {
 	zoneID, err := c.getZoneID(ctx, zone)
 	if err != nil {
@@ -71,6 +81,8 @@ func (c *client) GetRRSets(ctx context.Context, zone string) (map[RRSetKey]*RRSe
 	return result, nil
 }
 
+// CreateRRSet creates a RR set in the specified zone name.
+// If successful, set ID will be set in the provided set.
 func (c *client) CreateRRSet(ctx context.Context, zone string, set *RRSet) error {
 	zoneID, err := c.getZoneID(ctx, zone)
 	if err != nil {
@@ -86,6 +98,7 @@ func (c *client) CreateRRSet(ctx context.Context, zone string, set *RRSet) error
 	return nil
 }
 
+// UpdateRRSet updates a RR set in the specified zone name.
 func (c *client) UpdateRRSet(ctx context.Context, zone string, set *RRSet) error {
 	zoneID, err := c.getZoneID(ctx, zone)
 	if err != nil {
@@ -95,6 +108,7 @@ func (c *client) UpdateRRSet(ctx context.Context, zone string, set *RRSet) error
 	return c.dns.UpdateRRSet(ctx, zoneID, set.ID, set.toSelectel(zone))
 }
 
+// DeleteRRSet deletes a RR set with the specified ID in the specified zone name.
 func (c *client) DeleteRRSet(ctx context.Context, zone string, setID string) error {
 	zoneID, err := c.getZoneID(ctx, zone)
 	if err != nil {
