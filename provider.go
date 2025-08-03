@@ -12,7 +12,7 @@ import (
 
 // Provider implements libdns.Provider.
 type Provider struct {
-	Credentials Credentials
+	Credentials
 
 	_client Client
 	once    sync.Once
