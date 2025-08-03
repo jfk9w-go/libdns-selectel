@@ -11,7 +11,6 @@ package selectel
 
 import (
 	context "context"
-	iter "iter"
 	reflect "reflect"
 
 	v2 "github.com/selectel/domains-go/pkg/v2"
@@ -139,40 +138,39 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 	return m.recorder
 }
 
-// CreateRRSets mocks base method.
-func (m *MockClient) CreateRRSets(ctx context.Context, zone string, sets iter.Seq[RRSet]) (map[RRSetKey]RRSet, error) {
+// CreateRRSet mocks base method.
+func (m *MockClient) CreateRRSet(ctx context.Context, zone string, set *RRSet) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateRRSets", ctx, zone, sets)
-	ret0, _ := ret[0].(map[RRSetKey]RRSet)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CreateRRSets indicates an expected call of CreateRRSets.
-func (mr *MockClientMockRecorder) CreateRRSets(ctx, zone, sets any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateRRSets", reflect.TypeOf((*MockClient)(nil).CreateRRSets), ctx, zone, sets)
-}
-
-// DeleteRRSets mocks base method.
-func (m *MockClient) DeleteRRSets(ctx context.Context, zone string, sets iter.Seq[RRSet]) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteRRSets", ctx, zone, sets)
+	ret := m.ctrl.Call(m, "CreateRRSet", ctx, zone, set)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// DeleteRRSets indicates an expected call of DeleteRRSets.
-func (mr *MockClientMockRecorder) DeleteRRSets(ctx, zone, sets any) *gomock.Call {
+// CreateRRSet indicates an expected call of CreateRRSet.
+func (mr *MockClientMockRecorder) CreateRRSet(ctx, zone, set any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRRSets", reflect.TypeOf((*MockClient)(nil).DeleteRRSets), ctx, zone, sets)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateRRSet", reflect.TypeOf((*MockClient)(nil).CreateRRSet), ctx, zone, set)
+}
+
+// DeleteRRSet mocks base method.
+func (m *MockClient) DeleteRRSet(ctx context.Context, zone, setID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteRRSet", ctx, zone, setID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteRRSet indicates an expected call of DeleteRRSet.
+func (mr *MockClientMockRecorder) DeleteRRSet(ctx, zone, setID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRRSet", reflect.TypeOf((*MockClient)(nil).DeleteRRSet), ctx, zone, setID)
 }
 
 // GetRRSets mocks base method.
-func (m *MockClient) GetRRSets(ctx context.Context, zone string) (map[RRSetKey]RRSet, error) {
+func (m *MockClient) GetRRSets(ctx context.Context, zone string) (map[RRSetKey]*RRSet, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetRRSets", ctx, zone)
-	ret0, _ := ret[0].(map[RRSetKey]RRSet)
+	ret0, _ := ret[0].(map[RRSetKey]*RRSet)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -198,18 +196,18 @@ func (mr *MockClientMockRecorder) GetZones(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetZones", reflect.TypeOf((*MockClient)(nil).GetZones), ctx)
 }
 
-// UpdateRRSets mocks base method.
-func (m *MockClient) UpdateRRSets(ctx context.Context, zone string, sets iter.Seq[RRSet]) error {
+// UpdateRRSet mocks base method.
+func (m *MockClient) UpdateRRSet(ctx context.Context, zone string, set *RRSet) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateRRSets", ctx, zone, sets)
+	ret := m.ctrl.Call(m, "UpdateRRSet", ctx, zone, set)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// UpdateRRSets indicates an expected call of UpdateRRSets.
-func (mr *MockClientMockRecorder) UpdateRRSets(ctx, zone, sets any) *gomock.Call {
+// UpdateRRSet indicates an expected call of UpdateRRSet.
+func (mr *MockClientMockRecorder) UpdateRRSet(ctx, zone, set any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateRRSets", reflect.TypeOf((*MockClient)(nil).UpdateRRSets), ctx, zone, sets)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateRRSet", reflect.TypeOf((*MockClient)(nil).UpdateRRSet), ctx, zone, set)
 }
 
 // MockListable is a mock of Listable interface.

@@ -2,7 +2,6 @@ package selectel
 
 import (
 	"context"
-	"slices"
 	"testing"
 	"time"
 
@@ -144,22 +143,22 @@ func TestClient_GetRRSets(t *testing.T) {
 
 	sets, err := client.GetRRSets(ctx, "zone1.org")
 	require.NoError(t, err)
-	assert.Equal(t, map[RRSetKey]RRSet{
+	assert.Equal(t, map[RRSetKey]*RRSet{
 		{Name: "rrset1", Type: "A"}: {
 			Key: RRSetKey{Name: "rrset1", Type: "A"},
 			ID:  "rrset1-id",
 			TTL: 120 * time.Second,
-			RRs: []RR{
-				{Content: "1.1.1.1", Disabled: true},
-				{Content: "2.2.2.2"},
+			RRs: RRs{
+				enabled:  SetOf("2.2.2.2"),
+				disabled: SetOf("1.1.1.1"),
 			},
 		},
 		{Name: "rrset2", Type: "CNAME"}: {
 			Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
 			ID:  "rrset2-id",
 			TTL: 180 * time.Second,
-			RRs: []RR{
-				{Content: "rrset1.zone1.org"},
+			RRs: RRs{
+				enabled: SetOf("rrset1.zone1.org"),
 			},
 		},
 	}, sets)
@@ -217,42 +216,34 @@ func TestClient_CreateRRSets(t *testing.T) {
 		},
 	}
 
-	sets, err := client.CreateRRSets(ctx, "zone1.org", slices.Values([]RRSet{
-		{
-			Key: RRSetKey{Name: "rrset1", Type: "A"},
-			TTL: 2 * time.Minute,
-			RRs: []RR{
-				{Content: "1.1.1.1", Disabled: true},
-				{Content: "2.2.2.2"},
-			},
+	var (
+		set *RRSet
+		err error
+	)
+
+	set = &RRSet{
+		Key: RRSetKey{Name: "rrset1", Type: "A"},
+		TTL: 2 * time.Minute,
+		RRs: RRs{
+			enabled:  SetOf("2.2.2.2"),
+			disabled: SetOf("1.1.1.1"),
 		},
-		{
-			Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
-			RRs: []RR{
-				{Content: "rrset1.zone1.org"},
-			},
-		},
-	}))
+	}
+
+	err = client.CreateRRSet(ctx, "zone1.org", set)
 	require.NoError(t, err)
-	assert.Equal(t, map[RRSetKey]RRSet{
-		{Name: "rrset1", Type: "A"}: {
-			Key: RRSetKey{Name: "rrset1", Type: "A"},
-			ID:  "rrset1-id",
-			TTL: 120 * time.Second,
-			RRs: []RR{
-				{Content: "1.1.1.1", Disabled: true},
-				{Content: "2.2.2.2"},
-			},
+	assert.Equal(t, "rrset1-id", set.ID)
+
+	set = &RRSet{
+		Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
+		RRs: RRs{
+			enabled: SetOf("rrset1.zone1.org"),
 		},
-		{Name: "rrset2", Type: "CNAME"}: {
-			Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
-			ID:  "rrset2-id",
-			TTL: 60 * time.Second,
-			RRs: []RR{
-				{Content: "rrset1.zone1.org"},
-			},
-		},
-	}, sets)
+	}
+
+	err = client.CreateRRSet(ctx, "zone1.org", set)
+	require.NoError(t, err)
+	assert.Equal(t, "rrset2-id", set.ID)
 }
 
 func TestClient_UpdateRRSets(t *testing.T) {
@@ -280,17 +271,22 @@ func TestClient_UpdateRRSets(t *testing.T) {
 		},
 	}
 
-	err := client.UpdateRRSets(ctx, "zone1.org", slices.Values([]RRSet{
-		{
-			Key: RRSetKey{Name: "rrset1", Type: "A"},
-			ID:  "rrset1-id",
-			TTL: 2 * time.Minute,
-			RRs: []RR{
-				{Content: "1.1.1.1", Disabled: true},
-				{Content: "2.2.2.2"},
-			},
+	var (
+		set *RRSet
+		err error
+	)
+
+	set = &RRSet{
+		Key: RRSetKey{Name: "rrset1", Type: "A"},
+		ID:  "rrset1-id",
+		TTL: 2 * time.Minute,
+		RRs: RRs{
+			enabled:  SetOf("2.2.2.2"),
+			disabled: SetOf("1.1.1.1"),
 		},
-	}))
+	}
+
+	err = client.UpdateRRSet(ctx, "zone1.org", set)
 	require.NoError(t, err)
 }
 
@@ -310,8 +306,6 @@ func TestClient_DeleteRRSets(t *testing.T) {
 		},
 	}
 
-	err := client.DeleteRRSets(ctx, "zone1.org", slices.Values([]RRSet{
-		{ID: "rrset1-id"},
-	}))
+	err := client.DeleteRRSet(ctx, "zone1.org", "rrset1-id")
 	require.NoError(t, err)
 }

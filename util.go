@@ -1,34 +1,8 @@
 package selectel
 
 import (
-	"fmt"
-	"iter"
-	"slices"
-	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
 )
-
-type SeqMatcher[T any] struct {
-	t      *testing.T
-	values []T
-}
-
-func (m SeqMatcher[T]) Matches(x any) bool {
-	seq, ok := x.(iter.Seq[T])
-	if !ok {
-		return false
-	}
-
-	expected := m.values
-	actual := slices.Collect(seq)
-	return assert.ElementsMatch(m.t, expected, actual)
-}
-
-func (m SeqMatcher[T]) String() string {
-	return fmt.Sprintf("%+v", m.values)
-}
 
 func getTTL(values ...time.Duration) time.Duration {
 	var result time.Duration
@@ -39,4 +13,15 @@ func getTTL(values ...time.Duration) time.Duration {
 	}
 
 	return max(result, time.Minute)
+}
+
+type Set[T comparable] map[T]bool
+
+func SetOf[T comparable](values ...T) Set[T] {
+	set := make(map[T]bool)
+	for _, value := range values {
+		set[value] = true
+	}
+
+	return set
 }

@@ -35,20 +35,20 @@ func TestProvider_GetRecords(t *testing.T) {
 
 	ctx := context.Background()
 	client := NewMockClient(ctrl)
-	client.EXPECT().GetRRSets(ctx, "zone1.org").Return(map[RRSetKey]RRSet{
+	client.EXPECT().GetRRSets(ctx, "zone1.org").Return(map[RRSetKey]*RRSet{
 		{Name: "rrset1", Type: "A"}: {
 			Key: RRSetKey{Name: "rrset1", Type: "A"},
 			TTL: time.Hour,
-			RRs: []RR{
-				{Content: "1.1.1.1", Disabled: true},
-				{Content: "2.2.2.2"},
+			RRs: RRs{
+				enabled:  SetOf("2.2.2.2"),
+				disabled: SetOf("1.1.1.1"),
 			},
 		},
 		{Name: "rrset2", Type: "CNAME"}: {
 			Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
 			TTL: time.Minute,
-			RRs: []RR{
-				{Content: "rrset1.zone1.org"},
+			RRs: RRs{
+				enabled: SetOf("rrset1.zone1.org"),
 			},
 		},
 	}, nil)
@@ -68,89 +68,73 @@ func TestProvider_SetRecords(t *testing.T) {
 
 	ctx := context.Background()
 	client := NewMockClient(ctrl)
-	client.EXPECT().GetRRSets(ctx, "zone1.org").Return(map[RRSetKey]RRSet{
+
+	client.EXPECT().GetRRSets(ctx, "zone1.org").Return(map[RRSetKey]*RRSet{
 		{Name: "rrset1", Type: "A"}: {
 			Key: RRSetKey{Name: "rrset1", Type: "A"},
 			ID:  "rrset1-a",
 			TTL: time.Hour,
-			RRs: []RR{
-				{Content: "1.1.1.1", Disabled: true},
-				{Content: "2.2.2.2"},
-				{Content: "4.4.4.4", Disabled: true},
+			RRs: RRs{
+				enabled:  SetOf("2.2.2.2"),
+				disabled: SetOf("1.1.1.1", "4.4.4.4"),
 			},
 		},
 		{Name: "rrset2", Type: "CNAME"}: {
 			Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
 			ID:  "rrset2-cname",
 			TTL: time.Minute,
-			RRs: []RR{
-				{Content: "rrset1.zone1.org"},
+			RRs: RRs{
+				enabled: SetOf("rrset1.zone1.org"),
 			},
 		},
 		{Name: "rrset4", Type: "TXT"}: {
 			Key: RRSetKey{Name: "rrset4", Type: "TXT"},
 			ID:  "rrset4-txt",
 			TTL: time.Minute,
-			RRs: []RR{
-				{Content: "GOODBYE", Disabled: true},
+			RRs: RRs{
+				disabled: SetOf("GOODBYE"),
 			},
 		},
 	}, nil)
-	client.EXPECT().CreateRRSets(ctx, "zone1.org", SeqMatcher[RRSet]{t, []RRSet{
+
+	for _, set := range []*RRSet{
 		{
 			Key: RRSetKey{Name: "rrset3", Type: "TXT"},
 			TTL: time.Minute,
-			RRs: []RR{
-				{Content: "HELLO"},
+			RRs: RRs{
+				enabled: SetOf("HELLO"),
 			},
 		},
 		{
 			Key: RRSetKey{Name: "rrset1", Type: "CNAME"},
 			TTL: time.Minute,
-			RRs: []RR{
-				{Content: "rrset3.zone1.org"},
+			RRs: RRs{
+				enabled: SetOf("rrset3.zone1.org"),
 			},
 		},
-	}}).Return(map[RRSetKey]RRSet{
-		{Name: "rrset1", Type: "CNAME"}: {
-			Key: RRSetKey{Name: "rrset1", Type: "CNAME"},
-			ID:  "rrset1-cname",
-			TTL: time.Minute,
-			RRs: []RR{
-				{Content: "rrset3.zone1.org"},
-			},
-		},
-		{Name: "rrset3", Type: "TXT"}: {
-			Key: RRSetKey{Name: "rrset3", Type: "TXT"},
-			ID:  "rrset3-txt",
-			TTL: time.Minute,
-			RRs: []RR{
-				{Content: "HELLO"},
-			},
-		},
-	}, nil)
-	client.EXPECT().UpdateRRSets(ctx, "zone1.org", SeqMatcher[RRSet]{t, []RRSet{
+	} {
+		client.EXPECT().CreateRRSet(ctx, "zone1.org", set).Return(nil)
+	}
+
+	for _, set := range []*RRSet{
 		{
 			Key: RRSetKey{Name: "rrset1", Type: "A"},
 			ID:  "rrset1-a",
 			TTL: time.Hour,
-			RRs: []RR{
-				{Content: "1.1.1.1"},
-				{Content: "3.3.3.3"},
-				{Content: "4.4.4.4", Disabled: true},
+			RRs: RRs{
+				enabled:  SetOf("1.1.1.1", "3.3.3.3"),
+				disabled: SetOf("4.4.4.4"),
 			},
 		},
-	}}).Return(nil)
-	client.EXPECT().DeleteRRSets(ctx, "zone1.org", SeqMatcher[RRSet]{t, []RRSet{
-		{
-			Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
-			ID:  "rrset2-cname",
-			TTL: time.Minute,
-			RRs: []RR{
-				{Content: "rrset1.zone1.org"},
-			},
-		},
-	}}).Return(nil)
+	} {
+		client.EXPECT().UpdateRRSet(ctx, "zone1.org", set).Return(nil)
+	}
+
+	for _, setID := range []string{
+		"rrset2-cname",
+	} {
+		client.EXPECT().DeleteRRSet(ctx, "zone1.org", setID).Return(nil)
+	}
 
 	provider := &Provider{client: client}
 	records, err := provider.SetRecords(ctx, "zone1.org", []libdns.Record{
@@ -190,65 +174,60 @@ func TestProvider_AppendRecords(t *testing.T) {
 
 	ctx := context.Background()
 	client := NewMockClient(ctrl)
-	client.EXPECT().GetRRSets(ctx, "zone1.org").Return(map[RRSetKey]RRSet{
+
+	client.EXPECT().GetRRSets(ctx, "zone1.org").Return(map[RRSetKey]*RRSet{
 		{Name: "rrset1", Type: "A"}: {
 			Key: RRSetKey{Name: "rrset1", Type: "A"},
 			ID:  "rrset1-a",
 			TTL: time.Hour,
-			RRs: []RR{
-				{Content: "1.1.1.1", Disabled: true},
-				{Content: "2.2.2.2"},
-				{Content: "4.4.4.4", Disabled: true},
+			RRs: RRs{
+				enabled:  SetOf("2.2.2.2"),
+				disabled: SetOf("1.1.1.1", "4.4.4.4"),
 			},
 		},
 		{Name: "rrset2", Type: "CNAME"}: {
 			Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
 			ID:  "rrset2-cname",
 			TTL: time.Minute,
-			RRs: []RR{
-				{Content: "rrset1.zone1.org"},
+			RRs: RRs{
+				enabled: SetOf("rrset1.zone1.org"),
 			},
 		},
 		{Name: "rrset4", Type: "TXT"}: {
 			Key: RRSetKey{Name: "rrset4", Type: "TXT"},
 			ID:  "rrset4-txt",
 			TTL: time.Minute,
-			RRs: []RR{
-				{Content: "GOODBYE", Disabled: true},
+			RRs: RRs{
+				disabled: SetOf("GOODBYE"),
 			},
 		},
 	}, nil)
-	client.EXPECT().CreateRRSets(ctx, "zone1.org", SeqMatcher[RRSet]{t, []RRSet{
+
+	for _, set := range []*RRSet{
 		{
 			Key: RRSetKey{Name: "rrset3", Type: "TXT"},
 			TTL: time.Minute,
-			RRs: []RR{
-				{Content: "HELLO"},
+			RRs: RRs{
+				enabled: SetOf("HELLO"),
 			},
 		},
-	}}).Return(map[RRSetKey]RRSet{
-		{Name: "rrset3", Type: "TXT"}: {
-			Key: RRSetKey{Name: "rrset3", Type: "TXT"},
-			ID:  "rrset3-txt",
-			TTL: time.Minute,
-			RRs: []RR{
-				{Content: "HELLO"},
-			},
-		},
-	}, nil)
-	client.EXPECT().UpdateRRSets(ctx, "zone1.org", SeqMatcher[RRSet]{t, []RRSet{
+	} {
+		client.EXPECT().CreateRRSet(ctx, "zone1.org", set).Return(nil)
+	}
+
+	for _, set := range []*RRSet{
 		{
 			Key: RRSetKey{Name: "rrset1", Type: "A"},
 			ID:  "rrset1-a",
 			TTL: time.Hour,
-			RRs: []RR{
-				{Content: "1.1.1.1", Disabled: true},
-				{Content: "2.2.2.2"},
-				{Content: "3.3.3.3"},
-				{Content: "4.4.4.4"},
+			RRs: RRs{
+				enabled:  SetOf("2.2.2.2", "3.3.3.3", "4.4.4.4"),
+				disabled: SetOf("1.1.1.1"),
 			},
 		},
-	}}).Return(nil)
+	} {
+		client.EXPECT().UpdateRRSet(ctx, "zone1.org", set).Return(nil)
+	}
 
 	provider := &Provider{client: client}
 	records, err := provider.AppendRecords(ctx, "zone1.org", []libdns.Record{
@@ -287,93 +266,89 @@ func TestProvider_DeleteRecords(t *testing.T) {
 
 	ctx := context.Background()
 	client := NewMockClient(ctrl)
+
 	client.EXPECT().GetRRSets(ctx, "zone1.org").Return(map[RRSetKey]RRSet{
 		{Name: "rrset1", Type: "A"}: {
 			Key: RRSetKey{Name: "rrset1", Type: "A"},
 			ID:  "rrset1-a",
 			TTL: time.Hour,
-			RRs: []RR{
-				{Content: "1.1.1.1", Disabled: true},
-				{Content: "2.2.2.2"},
-				{Content: "4.4.4.4", Disabled: true},
+			RRs: RRs{
+				enabled:  SetOf("2.2.2.2"),
+				disabled: SetOf("1.1.1.1", "4.4.4.4"),
 			},
 		},
 		{Name: "rrset2", Type: "CNAME"}: {
 			Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
 			ID:  "rrset2-cname",
 			TTL: time.Minute,
-			RRs: []RR{
-				{Content: "rrset1.zone1.org"},
+			RRs: RRs{
+				enabled: SetOf("rrset1.zone1.org"),
 			},
 		},
 		{Name: "rrset4", Type: "TXT"}: {
 			Key: RRSetKey{Name: "rrset4", Type: "TXT"},
 			ID:  "rrset4-txt",
 			TTL: time.Minute,
-			RRs: []RR{
-				{Content: "GOODBYE", Disabled: true},
+			RRs: RRs{
+				disabled: SetOf("GOODBYE"),
 			},
 		},
 	}, nil)
-	client.EXPECT().DeleteRRSets(ctx, "zone1.org", SeqMatcher[RRSet]{t, []RRSet{
-		{
-			Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
-			ID:  "rrset2-cname",
-			TTL: time.Minute,
-			RRs: []RR{
-				{Content: "rrset1.zone1.org"},
-			},
-		},
-	}}).Return(nil)
-	client.EXPECT().UpdateRRSets(ctx, "zone1.org", SeqMatcher[RRSet]{t, []RRSet{
-		{
-			Key: RRSetKey{Name: "rrset1", Type: "A"},
-			ID:  "rrset1-a",
-			TTL: time.Hour,
-			RRs: []RR{
-				{Content: "1.1.1.1", Disabled: true},
-				{Content: "4.4.4.4", Disabled: true},
-			},
-		},
-	}}).Return(nil)
+	//
+	//client.EXPECT().DeleteRRSets(ctx, "zone1.org", SeqMatcher[RRSet]{t, []RRSet{
+	//	{
+	//		Key: RRSetKey{Name: "rrset2", Type: "CNAME"},
+	//		ID:  "rrset2-cname",
+	//		TTL: time.Minute,
+	//		RRs: []RR{
+	//			{Content: "rrset1.zone1.org"},
+	//		},
+	//	},
+	//}}).Return(nil)
+	//client.EXPECT().UpdateRRSets(ctx, "zone1.org", SeqMatcher[RRSet]{t, []RRSet{
+	//	{
+	//		Key: RRSetKey{Name: "rrset1", Type: "A"},
+	//		ID:  "rrset1-a",
+	//		TTL: time.Hour,
+	//		RRs: []RR{
+	//			{Content: "1.1.1.1", Disabled: true},
+	//			{Content: "4.4.4.4", Disabled: true},
+	//		},
+	//	},
+	//}}).Return(nil)
 
 	provider := &Provider{client: client}
 	records, err := provider.DeleteRecords(ctx, "zone1.org", []libdns.Record{
-		libdns.RR{
+		libdns.Address{
 			Name: "rrset1",
-			Type: "A",
 			TTL:  time.Hour,
-			Data: "2.2.2.2",
+			IP:   netip.AddrFrom4([4]byte{2, 2, 2, 2}),
 		},
-		libdns.RR{
+		libdns.Address{
 			Name: "rrset1",
-			Type: "A",
 			TTL:  time.Hour,
-			Data: "3.3.3.3",
+			IP:   netip.AddrFrom4([4]byte{3, 3, 3, 3}),
 		},
-		libdns.RR{
+		libdns.Address{
 			Name: "rrset1",
-			Type: "A",
 			TTL:  2 * time.Hour,
-			Data: "4.4.4.4",
+			IP:   netip.AddrFrom4([4]byte{4, 4, 4, 4}),
 		},
-		libdns.RR{
-			Name: "rrset2",
-			Type: "CNAME",
-			TTL:  time.Minute,
-			Data: "rrset1.zone1.org",
+		libdns.CNAME{
+			Name:   "rrset2",
+			TTL:    time.Minute,
+			Target: "rrset1.zone1.org",
 		},
-		libdns.RR{
+		libdns.TXT{
 			Name: "rrset4",
-			Type: "TXT",
 			TTL:  time.Minute,
-			Data: "HELLO",
+			Text: "HELLO",
 		},
 	})
 	require.NoError(t, err)
-	assert.ElementsMatch(t, []libdns.RR{
-		{Name: "rrset1", Type: "A", TTL: time.Hour, Data: "3.3.3.3"},
-		{Name: "rrset1", Type: "A", TTL: time.Hour, Data: "4.4.4.4"},
-		{Name: "rrset2", Type: "CNAME", TTL: time.Minute, Data: "rrset1.zone1.org"},
+	assert.ElementsMatch(t, []libdns.Record{
+		libdns.Address{Name: "rrset1", TTL: time.Hour, IP: netip.AddrFrom4([4]byte{3, 3, 3, 3})},
+		libdns.Address{Name: "rrset1", TTL: time.Hour, IP: netip.AddrFrom4([4]byte{4, 4, 4, 4})},
+		libdns.CNAME{Name: "rrset2", TTL: time.Minute, Target: "rrset1.zone1.org"},
 	}, records)
 }

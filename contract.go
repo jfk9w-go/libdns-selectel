@@ -3,7 +3,6 @@ package selectel
 
 import (
 	"context"
-	"iter"
 
 	v2 "github.com/selectel/domains-go/pkg/v2"
 )
@@ -20,8 +19,8 @@ type DNSClient interface {
 
 type Client interface {
 	GetZones(ctx context.Context) ([]string, error)
-	GetRRSets(ctx context.Context, zone string) (map[RRSetKey]RRSet, error)
-	CreateRRSets(ctx context.Context, zone string, sets iter.Seq[RRSet]) (map[RRSetKey]RRSet, error)
-	UpdateRRSets(ctx context.Context, zone string, sets iter.Seq[RRSet]) error
-	DeleteRRSets(ctx context.Context, zone string, sets iter.Seq[RRSet]) error
+	GetRRSets(ctx context.Context, zone string) (map[RRSetKey]*RRSet, error)
+	CreateRRSet(ctx context.Context, zone string, set *RRSet) error
+	UpdateRRSet(ctx context.Context, zone string, set *RRSet) error
+	DeleteRRSet(ctx context.Context, zone string, setID string) error
 }

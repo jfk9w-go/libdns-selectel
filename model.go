@@ -3,7 +3,7 @@ package selectel
 import (
 	"fmt"
 	"iter"
-	"reflect"
+	"maps"
 	"slices"
 	"sort"
 	"time"
@@ -21,77 +21,81 @@ func (k RRSetKey) String() string {
 	return fmt.Sprintf("%s %s", k.Type, k.Name)
 }
 
-type RR struct {
-	Disabled bool
-	Content  string
-}
+const (
+	enabled  int = 0
+	disabled int = 1
+)
+
+type RRs = [2]Set[string]
 
 type RRSet struct {
 	Key RRSetKey
 	ID  string
 	TTL time.Duration
-	RRs []RR
+	RRs RRs
 }
 
-func fromSelectel(rrs *v2.RRSet) RRSet {
-	set := RRSet{
+func (s *RRSet) match(other *RRSet) bool {
+	return s.TTL == other.TTL && maps.Equal(s.RRs[enabled], other.RRs[enabled])
+}
+
+func fromSelectel(rrs *v2.RRSet) *RRSet {
+	set := &RRSet{
 		Key: RRSetKey{
 			Name: rrs.Name,
 			Type: string(rrs.Type),
 		},
 		ID:  rrs.ID,
 		TTL: getTTL(time.Duration(rrs.TTL) * time.Second),
-		RRs: slices.Collect(func(yield func(RR) bool) {
-			for _, item := range rrs.Records {
-				rr := RR{
-					Disabled: item.Disabled,
-					Content:  item.Content,
-				}
-
-				if !yield(rr) {
-					return
-				}
-			}
-		}),
 	}
 
-	sort.Slice(set.RRs, func(i, j int) bool { return set.RRs[i].Content < set.RRs[j].Content })
+	for _, record := range rrs.Records {
+		idx := enabled
+		if record.Disabled {
+			idx = disabled
+		}
+
+		if set.RRs[idx] == nil {
+			set.RRs[idx] = make(Set[string])
+		}
+
+		set.RRs[idx][record.Content] = true
+	}
 
 	return set
 }
 
-func (s RRSet) isEqual(other RRSet) bool {
-	a, b := s.toRecords(), other.toRecords()
-	return reflect.DeepEqual(a, b)
-}
-
-func (s RRSet) isDisabled() bool {
-	return len(slices.Collect(s.toRecords())) == 0
-}
-
-func (s RRSet) toSelectel() *v2.RRSet {
-	return &v2.RRSet{
+func (s *RRSet) toSelectel() *v2.RRSet {
+	set := &v2.RRSet{
 		ID:   s.ID,
 		Name: s.Key.Name,
 		Type: v2.RecordType(s.Key.Type),
 		TTL:  int(getTTL(s.TTL).Seconds()),
 		Records: slices.Collect(func(yield func(v2.RecordItem) bool) {
-			for _, rr := range s.RRs {
-				item := v2.RecordItem{
-					Disabled: rr.Disabled,
-					Content:  rr.Content,
-				}
+			for idx := range s.RRs {
+				disabled := idx == disabled
+				for data := range s.RRs[idx] {
+					record := v2.RecordItem{
+						Disabled: disabled,
+						Content:  data,
+					}
 
-				if !yield(item) {
-					return
+					if !yield(record) {
+						return
+					}
 				}
 			}
 		}),
 	}
+
+	// for tests
+	sort.Slice(set.Records, func(i, j int) bool { return set.Records[i].Content < set.Records[j].Content })
+
+	return set
 }
 
-func fromRecords(records []libdns.Record) map[RRSetKey]RRSet {
-	result := make(map[RRSetKey]RRSet)
+func fromRecords(records []libdns.Record) map[RRSetKey]*RRSet {
+	result := make(map[RRSetKey]*RRSet)
 	for _, record := range records {
 		key := RRSetKey{
 			Name: record.RR().Name,
@@ -99,30 +103,32 @@ func fromRecords(records []libdns.Record) map[RRSetKey]RRSet {
 		}
 
 		set := result[key]
+		if set == nil {
+			set = &RRSet{
+				Key: key,
+				RRs: [2]Set[string]{
+					enabled: make(Set[string]),
+				},
+			}
 
-		set.Key = key
+			result[key] = set
+		}
+
 		set.TTL = getTTL(set.TTL, record.RR().TTL)
-		set.RRs = append(set.RRs, RR{Content: record.RR().Data})
-		sort.Slice(set.RRs, func(i, j int) bool { return set.RRs[i].Content < set.RRs[j].Content })
-
-		result[key] = set
+		set.RRs[enabled][record.RR().Data] = true
 	}
 
 	return result
 }
 
-func (s RRSet) toRecords() iter.Seq[libdns.Record] {
+func (s *RRSet) toRecords() iter.Seq[libdns.Record] {
 	return func(yield func(libdns.Record) bool) {
-		for _, rr := range s.RRs {
-			if rr.Disabled {
-				continue
-			}
-
+		for data := range s.RRs[enabled] {
 			rr := libdns.RR{
 				Name: s.Key.Name,
 				Type: s.Key.Type,
 				TTL:  getTTL(s.TTL),
-				Data: rr.Content,
+				Data: data,
 			}
 
 			record, err := rr.Parse()
@@ -135,56 +141,4 @@ func (s RRSet) toRecords() iter.Seq[libdns.Record] {
 			}
 		}
 	}
-}
-
-type RRSetDiff struct {
-	Removed  []RRSet
-	Modified []RRSet
-	Matched  []RRSet
-}
-
-func diffRRSets(prev, next map[RRSetKey]RRSet) (del []RRSet, mod []RRSet, keep []RRSet) {
-	for key, prev := range prev {
-		next, ok := next[key]
-		switch {
-		case !ok:
-			if prev.isDisabled() {
-				break
-			}
-
-			del = append(del, prev)
-		case !prev.isEqual(next):
-			mod = append(mod, prev)
-		default:
-			keep = append(keep, prev)
-		}
-	}
-
-	return
-}
-
-func toRecords(sets iter.Seq[RRSet]) iter.Seq[libdns.Record] {
-	return func(yield func(libdns.Record) bool) {
-		for set := range sets {
-			for record := range set.toRecords() {
-				if !yield(record) {
-					return
-				}
-			}
-		}
-	}
-}
-
-func parseRRs(rrs []libdns.RR) []libdns.Record {
-	records := make([]libdns.Record, len(rrs))
-	for i, rr := range rrs {
-		record, err := rr.Parse()
-		if err != nil {
-			record = rr
-		}
-
-		records[i] = record
-	}
-
-	return records
 }

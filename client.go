@@ -10,7 +10,6 @@ import (
 
 	"github.com/pkg/errors"
 	v2 "github.com/selectel/domains-go/pkg/v2"
-	"go.uber.org/multierr"
 )
 
 const defaultLimit = 100
@@ -39,7 +38,7 @@ func (c *client) GetZones(ctx context.Context) ([]string, error) {
 	return slices.Collect(maps.Keys(zoneIDs)), nil
 }
 
-func (c *client) GetRRSets(ctx context.Context, zone string) (map[RRSetKey]RRSet, error) {
+func (c *client) GetRRSets(ctx context.Context, zone string) (map[RRSetKey]*RRSet, error) {
 	zoneID, err := c.getZoneID(ctx, zone)
 	if err != nil {
 		return nil, errors.Wrap(err, "get zone ID")
@@ -49,7 +48,7 @@ func (c *client) GetRRSets(ctx context.Context, zone string) (map[RRSetKey]RRSet
 		return c.dns.ListRRSets(ctx, zoneID, params)
 	})
 
-	result := make(map[RRSetKey]RRSet)
+	result := make(map[RRSetKey]*RRSet)
 	for rrs, err := range iterator {
 		if err != nil {
 			return nil, errors.Wrap(err, "get RR sets")
@@ -62,50 +61,37 @@ func (c *client) GetRRSets(ctx context.Context, zone string) (map[RRSetKey]RRSet
 	return result, nil
 }
 
-func (c *client) CreateRRSets(ctx context.Context, zone string, sets iter.Seq[RRSet]) (result map[RRSetKey]RRSet, errs error) {
-	zoneID, err := c.getZoneID(ctx, zone)
-	if err != nil {
-		return nil, errors.Wrap(err, "get zone ID")
-	}
-
-	result = make(map[RRSetKey]RRSet)
-	for set := range sets {
-		rrs, err := c.dns.CreateRRSet(ctx, zoneID, set.toSelectel())
-		if !multierr.AppendInto(&errs, errors.Wrapf(err, "create %s", set.Key)) {
-			set := fromSelectel(rrs)
-			result[set.Key] = set
-		}
-	}
-
-	return
-}
-
-func (c *client) UpdateRRSets(ctx context.Context, zone string, sets iter.Seq[RRSet]) (errs error) {
+func (c *client) CreateRRSet(ctx context.Context, zone string, set *RRSet) error {
 	zoneID, err := c.getZoneID(ctx, zone)
 	if err != nil {
 		return errors.Wrap(err, "get zone ID")
 	}
 
-	for set := range sets {
-		err := c.dns.UpdateRRSet(ctx, zoneID, set.ID, set.toSelectel())
-		_ = multierr.AppendInto(&errs, errors.Wrapf(err, "update %s", set.Key))
+	rrs, err := c.dns.CreateRRSet(ctx, zoneID, set.toSelectel())
+	if err != nil {
+		return err
 	}
 
-	return
+	set.ID = rrs.ID
+	return nil
 }
 
-func (c *client) DeleteRRSets(ctx context.Context, zone string, sets iter.Seq[RRSet]) (errs error) {
+func (c *client) UpdateRRSet(ctx context.Context, zone string, set *RRSet) error {
 	zoneID, err := c.getZoneID(ctx, zone)
 	if err != nil {
 		return errors.Wrap(err, "get zone ID")
 	}
 
-	for set := range sets {
-		err := c.dns.DeleteRRSet(ctx, zoneID, set.ID)
-		_ = multierr.AppendInto(&errs, errors.Wrapf(err, "delete %s", set.Key))
+	return c.dns.UpdateRRSet(ctx, zoneID, set.ID, set.toSelectel())
+}
+
+func (c *client) DeleteRRSet(ctx context.Context, zone string, setID string) error {
+	zoneID, err := c.getZoneID(ctx, zone)
+	if err != nil {
+		return errors.Wrap(err, "get zone ID")
 	}
 
-	return
+	return c.dns.DeleteRRSet(ctx, zoneID, setID)
 }
 
 func (c *client) getZoneID(ctx context.Context, name string) (string, error) {

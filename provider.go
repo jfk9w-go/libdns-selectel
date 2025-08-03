@@ -2,9 +2,7 @@ package selectel
 
 import (
 	"context"
-	"maps"
 	"slices"
-	"sort"
 
 	"github.com/libdns/libdns"
 	"github.com/pkg/errors"
@@ -60,50 +58,49 @@ func (p *Provider) SetRecords(
 
 	next := fromRecords(records)
 
-	del, mod, _ := diffRRSets(prev, next)
-	add, _, _ := diffRRSets(next, prev)
-
-	for i := range mod {
-		set := &mod[i]
-		next := next[set.Key]
-		var rrs []RR
-		rrs = append(rrs, next.RRs...)
-		for _, srr := range set.RRs {
-			if !srr.Disabled {
-				continue
-			}
-
-			found := false
-			for _, nrr := range next.RRs {
-				if nrr.Content == srr.Content {
-					found = true
-					break
-				}
-			}
-
-			if !found {
-				rrs = append(rrs, srr)
-			}
+	for key, next := range next {
+		_, ok := prev[key]
+		if ok {
+			continue
 		}
 
-		sort.Slice(rrs, func(i, j int) bool { return rrs[i].Content < rrs[j].Content })
-
-		set.TTL = getTTL(set.TTL, next.TTL)
-		set.RRs = rrs
+		err := p.client.CreateRRSet(ctx, zone, next)
+		if !multierr.AppendInto(&errs, errors.Wrapf(err, "create %s", key)) {
+			result = append(result, slices.Collect(next.toRecords())...)
+		}
 	}
 
-	added, err := p.client.CreateRRSets(ctx, zone, slices.Values(add))
-	if !multierr.AppendInto(&errs, errors.Wrap(err, "create RR sets")) {
-		result = slices.AppendSeq(result, toRecords(maps.Values(added)))
-	}
+	for _, prev := range prev {
+		next, ok := next[prev.Key]
+		switch {
+		case !ok:
+			switch {
+			case len(prev.RRs[enabled]) == 0:
+				continue
+			case len(prev.RRs[disabled]) == 0:
+				err := p.client.DeleteRRSet(ctx, zone, prev.ID)
+				_ = multierr.AppendInto(&errs, errors.Wrapf(err, "delete %s", prev.Key))
+				continue
+			default:
+				next = new(RRSet)
+			}
 
-	err = p.client.UpdateRRSets(ctx, zone, slices.Values(mod))
-	if !multierr.AppendInto(&errs, errors.Wrap(err, "update RR sets")) {
-		result = slices.AppendSeq(result, toRecords(slices.Values(mod)))
-	}
+		case !prev.match(next):
+			prev.TTL = next.TTL
+			prev.RRs[enabled] = next.RRs[enabled]
+			for data := range prev.RRs[enabled] {
+				delete(prev.RRs[disabled], data)
+			}
 
-	err = p.client.DeleteRRSets(ctx, zone, slices.Values(del))
-	_ = multierr.AppendInto(&errs, errors.Wrap(err, "delete RR sets"))
+		default:
+			continue
+		}
+
+		err := p.client.UpdateRRSet(ctx, zone, prev)
+		if !multierr.AppendInto(&errs, errors.Wrapf(err, "update %s", prev.Key)) {
+			result = append(result, slices.Collect(prev.toRecords())...)
+		}
+	}
 
 	return
 }
@@ -119,58 +116,60 @@ func (p *Provider) AppendRecords(
 	}
 
 	next := fromRecords(records)
-	_, mod, _ := diffRRSets(prev, next)
-	add, _, _ := diffRRSets(next, prev)
 
-	var radd []libdns.RR
-	for i := range mod {
-		set := &mod[i]
-		next := next[set.Key]
-		ttl := getTTL(set.TTL, next.TTL)
-		for _, nrr := range next.RRs {
-			found := false
-			for i := range set.RRs {
-				srr := &set.RRs[i]
-				if srr.Content == nrr.Content {
-					if srr.Disabled {
-						srr.Disabled = false
-						radd = append(radd, libdns.RR{
-							Name: set.Key.Name,
-							Type: set.Key.Type,
-							TTL:  ttl,
-							Data: srr.Content,
-						})
-					}
+	for key, next := range next {
+		_, ok := prev[key]
+		if ok {
+			continue
+		}
 
-					found = true
-					break
-				}
+		err := p.client.CreateRRSet(ctx, zone, next)
+		if !multierr.AppendInto(&errs, errors.Wrapf(err, "create %s", key)) {
+			result = append(result, slices.Collect(next.toRecords())...)
+		}
+	}
+
+	for _, prev := range prev {
+		next, ok := next[prev.Key]
+		if !ok {
+			continue
+		}
+
+		var radd []libdns.Record
+		update := prev.TTL == next.TTL
+		prev.TTL = next.TTL
+		for data := range next.RRs[enabled] {
+			if prev.RRs[enabled][data] {
+				continue
 			}
 
-			if !found {
-				set.RRs = append(set.RRs, nrr)
-				radd = append(radd, libdns.RR{
-					Name: set.Key.Name,
-					Type: set.Key.Type,
-					TTL:  ttl,
-					Data: nrr.Content,
-				})
+			update = true
+			prev.RRs[enabled][data] = true
+			delete(prev.RRs[disabled], data)
+
+			rr := libdns.RR{
+				Name: prev.Key.Name,
+				Type: prev.Key.Type,
+				TTL:  prev.TTL,
+				Data: data,
+			}
+
+			record, err := rr.Parse()
+			if err != nil {
+				radd = append(radd, rr)
+			} else {
+				radd = append(radd, record)
 			}
 		}
 
-		sort.Slice(set.RRs, func(i, j int) bool { return set.RRs[i].Content < set.RRs[j].Content })
+		if !update {
+			continue
+		}
 
-		set.TTL = ttl
-	}
-
-	added, err := p.client.CreateRRSets(ctx, zone, slices.Values(add))
-	if !multierr.AppendInto(&errs, errors.Wrap(err, "create RR sets")) {
-		result = slices.AppendSeq(result, toRecords(maps.Values(added)))
-	}
-
-	err = p.client.UpdateRRSets(ctx, zone, slices.Values(mod))
-	if !multierr.AppendInto(&errs, errors.Wrap(err, "update RR sets")) {
-		result = append(result, parseRRs(radd)...)
+		err := p.client.UpdateRRSet(ctx, zone, prev)
+		if !multierr.AppendInto(&errs, errors.Wrapf(err, "update %s", prev.Key)) {
+			result = append(result, radd...)
+		}
 	}
 
 	return
@@ -181,55 +180,12 @@ func (p *Provider) DeleteRecords(
 	zone string,
 	records []libdns.Record,
 ) (result []libdns.Record, errs error) {
-	prev, err := p.client.GetRRSets(ctx, zone)
+	_, err := p.client.GetRRSets(ctx, zone)
 	if err != nil {
 		return nil, errors.Wrap(err, "get RR sets")
 	}
 
-	next := fromRecords(records)
-	_, mod, del := diffRRSets(prev, next)
-
-	var rdel []libdns.RR
-	for i := range mod {
-		set := &mod[i]
-		next := next[set.Key]
-		var rrs []RR
-		for i := range set.RRs {
-			srr := &set.RRs[i]
-			found := false
-			for _, nrr := range next.RRs {
-				if srr.Content == nrr.Content && !srr.Disabled {
-					found = true
-					break
-				}
-			}
-
-			if !found {
-				rrs = append(rrs, *srr)
-			} else {
-				rdel = append(rdel, libdns.RR{
-					Name: set.Key.Name,
-					Type: set.Key.Type,
-					TTL:  set.TTL,
-					Data: srr.Content,
-				})
-			}
-		}
-
-		sort.Slice(rrs, func(i, j int) bool { return rrs[i].Content < rrs[j].Content })
-
-		set.RRs = rrs
-	}
-
-	err = p.client.DeleteRRSets(ctx, zone, slices.Values(del))
-	if !multierr.AppendInto(&errs, errors.Wrap(err, "delete RR sets")) {
-		result = slices.AppendSeq(result, toRecords(slices.Values(del)))
-	}
-
-	err = p.client.UpdateRRSets(ctx, zone, slices.Values(mod))
-	if !multierr.AppendInto(&errs, errors.Wrap(err, "update RR sets")) {
-		result = slices.AppendSeq(result, toRecords(slices.Values(mod)))
-	}
+	_ = fromRecords(records)
 
 	return
 }
