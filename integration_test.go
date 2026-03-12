@@ -8,15 +8,11 @@ import (
 
 	"github.com/caarlos0/env/v11"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/joho/godotenv"
 	"github.com/libdns/libdns"
 	"github.com/stretchr/testify/require"
 )
 
 func TestProvider(t *testing.T) {
-	err := godotenv.Load()
-	require.NoError(t, err)
-
 	var creds struct {
 		Username    string `env:"USERNAME,required"`
 		Password    string `env:"PASSWORD,required"`
@@ -24,7 +20,7 @@ func TestProvider(t *testing.T) {
 		ProjectName string `env:"PROJECT_NAME,required"`
 	}
 
-	err = env.Parse(&creds)
+	err := env.Parse(&creds)
 	require.NoError(t, err)
 
 	provider := NewProvider(NewClient(Credentials{
